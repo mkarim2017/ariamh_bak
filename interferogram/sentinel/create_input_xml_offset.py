@@ -4,7 +4,7 @@ from string import Template
 
 
 def create_input_xml_offset(tmpl_file, xml_file, master_safe_dir, slave_safe_dir,
-                     master_orbit, slave_orbit, dem_file, swathnum, ampcor_skip_width,
+                     master_orbit, slave_orbit, dem_file, geocode_dem_file, swathnum, ampcor_skip_width,
                      ampcor_skip_height,ampcor_src_win_width,ampcor_src_win_height,
                      ampcor_src_width,ampcor_src_height):
     with open(tmpl_file) as f:
@@ -15,6 +15,7 @@ def create_input_xml_offset(tmpl_file, xml_file, master_safe_dir, slave_safe_dir
                                      MASTER_ORBIT_FILE=master_orbit,
                                      SLAVE_ORBIT_FILE=slave_orbit,
                                      DEM_FILE=dem_file,
+                                     GEOCODE_DEM_FILE=geocode_dem_file,
                                      SWATHNUM=swathnum,
                                      AMPCOR_SKIP_WIDTH=ampcor_skip_width,
                                      AMPCOR_SKIP_HEIGHT=ampcor_skip_height,
@@ -34,16 +35,17 @@ def main():
     master_orbit = sys.argv[5]
     slave_orbit = sys.argv[6]
     dem_file = sys.argv[7]
-    swathnum = sys.argv[8]
-    ampcor_skip_width = sys.argv[9]
-    ampcor_skip_height = sys.argv[10]
-    ampcor_src_win_width = sys.argv[11]
-    ampcor_src_win_height = sys.argv[12]
-    ampcor_src_width = sys.argv[13]
-    ampcor_src_height = sys.argv[14]
+    geocode_dem_file = sys.argv[8]
+    swathnum = sys.argv[9]
+    ampcor_skip_width = sys.argv[10]
+    ampcor_skip_height = sys.argv[11]
+    ampcor_src_win_width = sys.argv[12]
+    ampcor_src_win_height = sys.argv[13]
+    ampcor_src_width = sys.argv[14]
+    ampcor_src_height = sys.argv[15]
     
     create_input_xml_offset(tmpl_file, xml_file, master_safe_dir, slave_safe_dir,
-                     master_orbit, slave_orbit, dem_file, swathnum, ampcor_skip_width,
+                     master_orbit, slave_orbit, dem_file, geocode_dem_file, swathnum, ampcor_skip_width,
                      ampcor_skip_height,ampcor_src_win_width,ampcor_src_win_height,
                      ampcor_src_width,ampcor_src_height)
 
@@ -54,4 +56,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

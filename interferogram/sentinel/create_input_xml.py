@@ -5,7 +5,7 @@ from string import Template
 
 def create_input_xml(tmpl_file, xml_file, master_safe_dir, slave_safe_dir,
                      master_orbit, slave_orbit, master_pol, slave_pol,
-                     dem_file, swathnum, azimuth_looks, range_looks,
+                     dem_file, geocode_dem_file, swathnum, azimuth_looks, range_looks,
                      filter_strength, bbox, use_virtual_files, do_esd, 
                      esd_coherence_threshold):
     with open(tmpl_file) as f:
@@ -18,6 +18,7 @@ def create_input_xml(tmpl_file, xml_file, master_safe_dir, slave_safe_dir,
                                      MASTER_POL=master_pol,
                                      SLAVE_POL=slave_pol,
                                      DEM_FILE=dem_file,
+                                     GEOCODE_DEM_FILE=geocode_dem_file,
                                      SWATHNUM=swathnum,
                                      AZIMUTH_LOOKS=azimuth_looks,
                                      RANGE_LOOKS=range_looks,
@@ -40,17 +41,18 @@ def main():
     master_pol = sys.argv[7]
     slave_pol = sys.argv[8]
     dem_file = sys.argv[9]
-    swathnum = sys.argv[10]
-    azimuth_looks = sys.argv[11]
-    range_looks = sys.argv[12]
-    filter_strength = sys.argv[13]
-    bbox = sys.argv[14]
-    use_virtual_files = sys.argv[15]
-    do_esd = sys.argv[16]
-    esd_coherence_threshold = sys.argv[17]
+    geocode_dem_file = sys.argv[10]
+    swathnum = sys.argv[11]
+    azimuth_looks = sys.argv[12]
+    range_looks = sys.argv[13]
+    filter_strength = sys.argv[14]
+    bbox = sys.argv[15]
+    use_virtual_files = sys.argv[16]
+    do_esd = sys.argv[17]
+    esd_coherence_threshold = sys.argv[18]
     create_input_xml(tmpl_file, xml_file, master_safe_dir, slave_safe_dir,
                      master_orbit, slave_orbit, master_pol, slave_pol,
-                     dem_file, swathnum, azimuth_looks, range_looks, 
+                     dem_file, geocode_dem_file, swathnum, azimuth_looks, range_looks, 
                      filter_strength, bbox, use_virtual_files, do_esd, 
                      esd_coherence_threshold)
 
