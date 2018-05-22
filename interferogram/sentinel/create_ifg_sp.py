@@ -126,6 +126,23 @@ def get_polarization(id):
     elif pp == "SH": return "hh"
     else: raise RuntimeError("Unrecognized polarization: %s" % pp)
 
+def move_dem_separate_dir (dir_name):
+    if os.path.isdir(dir_name):
+        rmdir_cmd=["rm", "-rf", dir_name]
+        rmdir_cmd_line=" ".join(rmdir_cmd)
+        logger.info("Calling {}".format(rmdir_cmd_line))
+        check_call(rmdir_cmd_line, shell=True)
+
+    mkdir_cmd=["mkdir", dir_name]
+    mkdir_cmd_line=" ".join(mkdir_cmd)
+    logger.info("Calling {}".format(mkdir_cmd_line))
+    check_call(mkdir_cmd_line, shell=True)
+
+    move_cmd=["mv", "demLat*", dir_name]
+    move_cmd_line=" ".join(move_cmd)
+    logger.info("Calling {}".format(move_cmd_line))
+    check_call(move_cmd_line, shell=True)
+
 
 def call_noerr(cmd):
     """Run command and warn if exit status is not 0."""
@@ -153,7 +170,8 @@ def main():
     #Pull topsApp configs
     ctx['azimuth_looks'] = ctx.get("context", {}).get("azimuth_looks", 3)
     ctx['range_looks'] = ctx.get("context", {}).get("range_looks", 7)
-
+    
+    #ctx['swathnum'] = None
     # stitch all subswaths?
     ctx['stitch_subswaths_xt'] = False
     if ctx['swathnum'] is None:
@@ -198,8 +216,15 @@ def main():
     # get union bbox
     logger.info("Determining envelope bbox from SLC swaths.")
     bbox_json = "bbox.json"
-    bbox_cmd_tmpl = "{}/get_union_bbox.sh -o {} *.SAFE/annotation/s1?-iw{}-slc-{}-*.xml"
-    check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
+    if ctx['stitch_subswaths_xt']:
+        logger.info("stitch_subswaths_xt is True")
+        bbox_cmd_tmpl = "{}/get_union_bbox.sh -o {} *.SAFE/annotation/s1?-iw?-slc-{}-*.xml"
+        check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json,
+                                    match_pol), shell=True)
+    else:
+        logger.info("stitch_subswaths_xt is False. Processing for swathnum : %s" %ctx['swathnum'])
+        bbox_cmd_tmpl = "{}/get_union_bbox.sh -o {} *.SAFE/annotation/s1?-iw{}-slc-{}-*.xml"
+        check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
                                     match_pol), shell=True)
     with open(bbox_json) as f:
         bbox = json.load(f)['envelope']
@@ -237,12 +262,15 @@ def main():
     '''
     # get DEM configuration
     dem_type = ctx.get("context", {}).get("dem_type", "SRTM+v3")
-    srtm1_dem_url = uu.srtm1_dem_url
+    dem_url = uu.dem_url
     srtm3_dem_url = uu.srtm3_dem_url
     ned1_dem_url = uu.ned1_dem_url
     ned13_dem_url = uu.ned13_dem_url
     dem_user = uu.dem_u
     dem_pass = uu.dem_p
+
+    preprocess_dem_dir="preprocess_dem"
+    geocode_dem_dir="geocode_dem"
 
     # download project specific preprocess DEM
     if 'kilauea' in ctx['project']:
@@ -258,34 +286,33 @@ def main():
         dem_N = int(math.ceil(dem_N))
         dem_W = int(math.floor(dem_W))
         dem_E = int(math.ceil(dem_E))
-        preprocess_dem_url = None
+        
+
         if dem_type.startswith("SRTM"):
-            if dem_type == "SRTM+v3":
-                preprocess_dem_url = srtm1_dem_url
-            elif dem_type.startswith("SRTM3"):
-                preprocess_dem_url = srtm3_dem_url
-            else:
-                raise RuntimeError("Unknown SRTM dem type %s." % dem_type)
+            if dem_type.startswith("SRTM3"):
+                dem_url = srtm3_dem_url
+  
             dem_cmd = [
                 "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
                 "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
                 "-r", "-s", "1", "-f", "-x", "-c", "-n", dem_user, "-w", dem_pass,
-                "-u", preprocess_dem_url
+                "-u", dem_url
             ]
             dem_cmd_line = " ".join(dem_cmd)
             logger.info("Calling dem.py: {}".format(dem_cmd_line))
             check_call(dem_cmd_line, shell=True)
             preprocess_dem_file = glob("*.dem.wgs84")[0]
+            
         else:
-            if dem_type == "NED1": preprocess_dem_url = ned1_dem_url
-            elif dem_type.startswith("NED13"): preprocess_dem_url = ned13_dem_url
+            if dem_type == "NED1": dem_url = ned1_dem_url
+            elif dem_type.startswith("NED13"): dem_url = ned13_dem_url
             else: raise RuntimeError("Unknown dem type %s." % dem_type)
             if dem_type == "NED13-downsampled": downsample_option = "-d 33%"
             else: downsample_option = ""
             dem_cmd = [
                 "{}/ned_dem.py".format(BASE_PATH), "-a",
                 "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
-                downsample_option, "-u", dem_user, "-p", dem_pass, preprocess_dem_url
+                downsample_option, "-u", dem_user, "-p", dem_pass, dem_url
             ]
             dem_cmd_line = " ".join(dem_cmd)
             logger.info("Calling ned_dem.py: {}".format(dem_cmd_line))
@@ -293,6 +320,8 @@ def main():
             preprocess_dem_file = "stitched.dem"
     logger.info("Using Preprocess DEM file: {}".format(preprocess_dem_file))
 
+    move_dem_separate_dir(preprocess_dem_dir)
+    preprocess_dem_file = os.path.join(preprocess_dem_dir, preprocess_dem_file)
 
     # fix file path in Preprocess DEM xml
     fix_cmd = [
@@ -303,6 +332,7 @@ def main():
     logger.info("Calling fixImageXml.py: {}".format(fix_cmd_line))
     check_call(fix_cmd_line, shell=True)
     
+
     geocode_dem_url = srtm3_dem_url
     dem_cmd = [
         "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
@@ -314,7 +344,11 @@ def main():
     logger.info("Calling dem.py: {}".format(dem_cmd_line))
     check_call(dem_cmd_line, shell=True)
     geocode_dem_file = glob("*.dem.wgs84")[0]
+    
+    move_dem_separate_dir(geocode_dem_dir)
+    geocode_dem_file = os.path.join(geocode_dem_dir, geocode_dem_file)
     logger.info("Using Geocode DEM file: {}".format(geocode_dem_file))
+
 
     # fix file path in Geocoding DEM xml
     fix_cmd = [
@@ -347,6 +381,10 @@ def main():
                      ctx['azimuth_looks'], ctx['range_looks'], ctx['filter_strength'],
                      "{} {} {} {}".format(*bbox), "True", do_esd,
                      esd_coh_th)
+
+    #get the time before stating topsApp.py
+    topsApp_start_time=datetime.now()
+    logger.info("TopsApp Start Time : {}".format(topsApp_start_time))
 
     # run topsApp to prepesd step
     topsapp_cmd = [
@@ -401,6 +439,13 @@ def main():
     topsapp_cmd_line = " ".join(topsapp_cmd)
     logger.info("Calling topsApp.py to geocode step: {}".format(topsapp_cmd_line))
     check_call(topsapp_cmd_line, shell=True)
+
+    #topsApp End Time
+    topsApp_end_time=datetime.now() 
+    logger.info("TopsApp End Time : {}".format(topsApp_start_time))
+
+    topsApp_run_time=topsApp_end_time - topsApp_start_time
+    logger.info("New TopsApp Run Time : {}".format(topsApp_run_time))
 
     # get radian value for 5-cm wrap
     rt = parse('master/IW{}.xml'.format(ctx['swathnum']))
