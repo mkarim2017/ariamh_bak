@@ -1,3 +1,10 @@
+#!/usr/bin/env python3 
+import os, sys, re, requests, json, shutil, traceback, logging, hashlib, math
+from itertools import chain
+from zipfile import ZipFile
+from subprocess import check_call, CalledProcessError
+from glob import glob
+from lxml.etree import parse
 import numpy as np
 from datetime import datetime
 
