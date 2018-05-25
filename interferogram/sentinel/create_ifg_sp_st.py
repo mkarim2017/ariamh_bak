@@ -84,6 +84,156 @@ def create_dataset_json(id, version, met_file, ds_file):
     with open(ds_file, 'w') as f:
         json.dump(ds, f, indent=2)
 
+def get_union_polygon(ds_files):
+    """Get GeoJSON polygon of union of IFGs."""
+
+    geom_union = None
+    for ds_file in ds_files:
+         with open(ds_file) as f:
+             ds = json.load(f)
+         geom = ogr.CreateGeometryFromJson(json.dumps(ds['location'], indent=2, sort_keys=True))
+         if geom_union is None: geom_union = geom
+         else: geom_union = geom_union.Union(geom)
+    return json.loads(geom_union.ExportToJson()), geom_union.GetEnvelope()
+
+
+def get_times(ds_files):
+    """Get starttimes and endtimes."""
+
+    starttimes = []
+    endtimes = []
+    for ds_file in ds_files:
+         with open(ds_file) as f:
+             ds = json.load(f)
+         starttimes.append(ds['starttime'])
+         endtimes.append(ds['endtime'])
+    return starttimes, endtimes
+
+
+def create_stitched_dataset_json(id, version, ds_files, ds_json_file):
+    """Create HySDS dataset json file."""
+
+    # get union polygon
+    location, env = get_union_polygon(ds_files)
+    logger.info("union polygon: {}.".format(json.dumps(location, indent=2, sort_keys=True)))
+
+    # get starttime and endtimes
+    starttimes, endtimes = get_times(ds_files)
+    starttimes.sort()
+    endtimes.sort()
+    starttime = starttimes[0]
+    endtime = endtimes[-1]
+
+    # build dataset
+    ds = {
+        'creation_timestamp': "%sZ" % datetime.utcnow().isoformat(),
+        'version': version,
+        'label': id,
+        'location': location,
+        'starttime': starttime,
+        'endtime': endtime,
+    }
+
+    # write out dataset json
+    with open(ds_json_file, 'w') as f:
+        json.dump(ds, f, indent=2)
+
+    # return envelope and times
+    return env, starttime, endtime
+
+
+def create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file, direction):
+    """Create HySDS met json file."""
+
+    # build met
+    bbox = [
+        [ env[3], env[0] ],
+        [ env[3], env[1] ],
+        [ env[2], env[1] ],
+        [ env[2], env[0] ],
+    ]
+    met = {
+        'stitch_direction': direction,
+        'product_type': 'interferogram',
+        'master_scenes': [],
+        'refbbox': [],
+        'esd_threshold': [],
+        'frameID': [],
+        'temporal_span': None,
+        'swath': [],
+        'trackNumber': None,
+        'archive_filename': id,
+        'dataset_type': 'slc',
+        'tile_layers': [ 'amplitude', 'displacement' ],
+        'latitudeIndexMin': int(math.floor(env[2] * 10)),
+        'latitudeIndexMax': int(math.ceil(env[3] * 10)),
+        'parallelBaseline': [],
+        'url': [],
+        'doppler': [],
+        'version': [],
+        'slave_scenes': [],
+        'orbit_type': [],
+        'spacecraftName': [],
+        'frameNumber': None,
+        'reference': None,
+        'bbox': bbox,
+        'ogr_bbox': [[x, y] for y, x in bbox],
+        'orbitNumber': [],
+        'inputFile': 'ifg_stitch.json',
+        'perpendicularBaseline': [],
+        'orbitRepeat': [],
+        'sensingStop': endtime,
+        'polarization': [],
+        'scene_count': 0,
+        'beamID': None,
+        'sensor': [],
+        'lookDirection': [],
+        'platform': [],
+        'startingRange': [],
+        'frameName': [],
+        'tiles': True,
+        'sensingStart': starttime,
+        'beamMode': [],
+        'imageCorners': [],
+        'direction': [],
+        'prf': [],
+        "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
+    }
+
+    # collect values
+    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
+                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
+                  'sensor', 'lookDirection', 'platform', 'startingRange',
+                  'beamMode', 'direction', 'prf' )
+    single_params = ('temporal_span', 'trackNumber')
+    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline')
+    mean_params = ('perpendicularBaseline', 'parallelBaseline')
+    for i, met_file in enumerate(met_files):
+        with open(met_file) as f:
+            md = json.load(f)
+        for param in set_params:
+            #logger.info("param: {}".format(param))
+            if isinstance(md[param], list):
+                met[param].extend(md[param])
+            else:
+                met[param].append(md[param])
+        if i == 0:
+            for param in single_params:
+                met[param] = md[param]
+        met['scene_count'] += 1
+    for param in set_params:
+        tmp_met = list(set(met[param]))
+        if param in list_params:
+            met[param] = tmp_met
+        else:
+            met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
+    for param in mean_params:
+        met[param] = np.mean(met[param])
+
+    # write out dataset json
+    with open(met_json_file, 'w') as f:
+        json.dump(met, f, indent=2)
 
 def ifg_exists(es_url, es_index, id):
     """Check interferogram exists in GRQ."""
@@ -738,7 +888,15 @@ def main():
         
         ds_files.append(ds_file)
         met_files.append(met_file)
-          
+    
+    # create stitched dataset json
+    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format(id))
+    envelope, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
+    
+    # create stitched met json
+    met_json_file = os.path.join(dataset_dir, "{}.met.json".format(id))
+    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file, direction)
+
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
     #shutil.rmtree(prod_merged_dir)
