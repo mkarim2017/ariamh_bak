@@ -143,7 +143,7 @@ def create_stitched_dataset_json(id, version, ds_files, ds_json_file):
     return env, starttime, endtime
 
 
-def create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file, direction):
+def create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file):
     """Create HySDS met json file."""
 
     # build met
@@ -154,15 +154,14 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         [ env[2], env[0] ],
     ]
     met = {
-        'stitch_direction': direction,
         'product_type': 'interferogram',
         'master_scenes': [],
         'refbbox': [],
         'esd_threshold': [],
         'frameID': [],
-        'temporal_span': None,
-        'swath': [],
-        'trackNumber': None,
+        'temporal_span': [],
+        'swath': [1, 2, 3],
+        'trackNumber': [],
         'archive_filename': id,
         'dataset_type': 'slc',
         'tile_layers': [ 'amplitude', 'displacement' ],
@@ -180,12 +179,12 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'bbox': bbox,
         'ogr_bbox': [[x, y] for y, x in bbox],
         'orbitNumber': [],
-        'inputFile': 'ifg_stitch.json',
+        'inputFile': '"sentinel.ini',
         'perpendicularBaseline': [],
         'orbitRepeat': [],
         'sensingStop': endtime,
         'polarization': [],
-        'scene_count': 0,
+        'scene_count': 1,
         'beamID': None,
         'sensor': [],
         'lookDirection': [],
@@ -198,6 +197,10 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'imageCorners': [],
         'direction': [],
         'prf': [],
+        'range_looks': [],
+        'dem_type': None,
+        'filter_strength': [],
+	'azimuth_looks': [],
         "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
     }
 
@@ -206,9 +209,9 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
                   'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
                   'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
                   'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf' )
-    single_params = ('temporal_span', 'trackNumber')
-    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline')
+                  'beamMode', 'direction', 'prf', 'azimuth_looks')
+    single_params = ('temporal_span', 'trackNumber', 'dem_type')
+    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
     mean_params = ('perpendicularBaseline', 'parallelBaseline')
     for i, met_file in enumerate(met_files):
         with open(met_file) as f:
@@ -327,7 +330,7 @@ def main():
     ctx['stitch_subswaths_xt'] = False
     if ctx['swathnum'] is None:
         ctx['stitch_subswaths_xt'] = True
-        ctx['swathnum'] = 1
+        ctx['swathnum'] = [1, 2, 3]
         # use default azimuth and range looks for cross-swath stitching
         ctx['azimuth_looks'] = ctx.get("context", {}).get("azimuth_looks", 7)
         ctx['range_looks'] = ctx.get("context", {}).get("range_looks", 19)
@@ -384,10 +387,6 @@ def main():
         check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
                                     match_pol), shell=True)
     
-    bbox_cmd_tmpl = "{}/get_union_bbox.sh -o {} *.SAFE/annotation/s1?-iw{}-slc-{}-*.xml"
-    check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
-                                    match_pol), shell=True)
-
     with open(bbox_json) as f:
         bbox = json.load(f)['envelope']
     logger.info("bbox: {}".format(bbox))
@@ -637,11 +636,11 @@ def main():
     shutil.move('PICKLE', prod_dir)
 
     for swathnum in swath_list:
-        ctx['swathnum'] = swathnum
-        logger.info("\n\nPROCESSING SWATH : {}".format(ctx['swathnum']))
+       # ctx['swathnum'] = swathnum
+        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
 
         # get radian value for 5-cm wrap
-        rt = parse('master/IW{}.xml'.format(ctx['swathnum']))
+        rt = parse('master/IW{}.xml'.format(swathnum))
         wv = eval(rt.xpath('.//property[@name="radarwavelength"]/value/text()')[0])
         rad = 4 * np.pi * .05 / wv
         logger.info("Radian value for 5-cm wrap is: {}".format(rad))
@@ -690,11 +689,11 @@ def main():
         # save other files to product directory
         shutil.copyfile("_context.json", os.path.join(prod_dir,"{}.context.json".format(id)))
         shutil.copyfile("topsApp.xml", os.path.join(prod_dir, "topsApp.xml"))
-        shutil.copyfile("fine_interferogram/IW{}.xml".format(ctx['swathnum']),
+        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "fine_interferogram.xml"))
-        shutil.copyfile("master/IW{}.xml".format(ctx['swathnum']),
+        shutil.copyfile("master/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "master.xml"))
-        shutil.copyfile("slave/IW{}.xml".format(ctx['swathnum']),
+        shutil.copyfile("slave/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "slave.xml"))
         if os.path.exists('topsProc.xml'):
             shutil.copyfile("topsProc.xml", os.path.join(prod_dir, "topsProc.xml"))
@@ -785,7 +784,7 @@ def main():
         slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
         slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
 
-        met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, ctx['swathnum']))
+        met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
 
         extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..',
                                                     '..', 'frameMetadata',
@@ -793,12 +792,12 @@ def main():
 
         extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
         check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       ctx['swathnum'], master_pol, met_file),shell=True)   
+                                       swathnum, master_pol, met_file),shell=True)   
 
         # update met JSON
         update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
         check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
-                                     ctx['swathnum'], master_mission,
+                                     swathnum, master_mission,
                                      slave_mission, prod_dir, 'PICKLE',
                                      prod_dir, fine_int_xml,
                                      prod_merged_dir, unw_vrt,
@@ -826,7 +825,7 @@ def main():
         with open(met_file, 'w') as f: json.dump(md, f, indent=2)
     
         # generate dataset JSON
-        ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id, ctx['swathnum']))
+        ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id,swathnum))
         create_dataset_json(id, version, met_file, ds_file)
         
         ds_files.append(ds_file)
@@ -834,11 +833,11 @@ def main():
     
     # create stitched dataset json
     ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format(id))
-    envelope, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
+    env, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
     
     # create stitched met json
     met_json_file = os.path.join(prod_dir, "{}.met.json".format(id))
-    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file, direction)
+    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
 
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
