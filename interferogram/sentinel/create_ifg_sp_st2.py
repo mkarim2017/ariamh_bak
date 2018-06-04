@@ -612,6 +612,15 @@ def main():
     met_files=[]
     ds_files=[]
 
+    # get radian value for 5-cm wrap. As it is same for all swath, we will use swathnum = 1
+    rt = parse('master/IW{}.xml'.format(1))
+    wv = eval(rt.xpath('.//property[@name="radarwavelength"]/value/text()')[0])
+    rad = 4 * np.pi * .05 / wv
+    logger.info("Radian value for 5-cm wrap is: {}".format(rad))
+
+
+
+
     # create product directory
     prod_dir = id
     os.makedirs(prod_dir, 0o755)
@@ -620,17 +629,67 @@ def main():
     prod_merged_dir = os.path.join(prod_dir, 'merged')
     os.makedirs(prod_merged_dir, 0o755)
 
+
     # generate GDAL (ENVI) headers and move to product directory
     raster_prods = (
-            'merged/topophase.cor',
-            'merged/topophase.flat',
-            'merged/filt_topophase.flat',
-            'merged/filt_topophase.unw',
-            'merged/filt_topophase.unw.conncomp',
-            'merged/phsig.cor',
-            'merged/los.rdr',
-            'merged/dem.crop',
+        'merged/topophase.cor',
+        'merged/topophase.flat',
+        'merged/filt_topophase.flat',
+        'merged/filt_topophase.unw',
+        'merged/filt_topophase.unw.conncomp',
+        'merged/phsig.cor',
+        'merged/los.rdr',
+        'merged/dem.crop',
     )
+    for i in raster_prods:
+        # radar-coded products
+        call_noerr("isce2gis.py envi -i {}".format(i))
+        #call_noerr("gdal_translate {} {}.tif".format(i, i))
+        gdal_xml = "{}.xml".format(i)
+        gdal_hdr = "{}.hdr".format(i)
+        #gdal_tif = "{}.tif".format(i)
+        gdal_vrt = "{}.vrt".format(i)
+        if os.path.exists(i): shutil.move(i, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(i))
+        if os.path.exists(gdal_xml): shutil.move(gdal_xml, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_xml))
+        if os.path.exists(gdal_hdr): shutil.move(gdal_hdr, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_hdr))
+        #if os.path.exists(gdal_tif): shutil.move(gdal_tif, prod_merged_dir)
+        #else: logger.warn("{} wasn't generated.".format(gdal_tif))
+        if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_vrt))
+
+        # geo-coded products
+        j = "{}.geo".format(i)
+        if not os.path.exists(j): continue
+        call_noerr("isce2gis.py envi -i {}".format(j))
+        #call_noerr("gdal_translate {} {}.tif".format(j, j))
+        gdal_xml = "{}.xml".format(j)
+        gdal_hdr = "{}.hdr".format(j)
+        #gdal_tif = "{}.tif".format(j)
+        gdal_vrt = "{}.vrt".format(j)
+        if os.path.exists(j): shutil.move(j, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(j))
+        if os.path.exists(gdal_xml): shutil.move(gdal_xml, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_xml))
+        if os.path.exists(gdal_hdr): shutil.move(gdal_hdr, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_hdr))
+        #if os.path.exists(gdal_tif): shutil.move(gdal_tif, prod_merged_dir)
+        #else: logger.warn("{} wasn't generated.".format(gdal_tif))
+        if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
+        else: logger.warn("{} wasn't generated.".format(gdal_vrt))
+
+
+
+    # save other files to product directory
+    shutil.copyfile("_context.json", os.path.join(prod_dir,"{}.context.json".format(id)))
+    shutil.copyfile("topsApp.xml", os.path.join(prod_dir, "topsApp.xml"))
+    if os.path.exists('topsProc.xml'):
+        shutil.copyfile("topsProc.xml", os.path.join(prod_dir, "topsProc.xml"))
+    if os.path.exists('isce.log'):
+        shutil.copyfile("isce.log", os.path.join(prod_dir, "isce.log"))
+
 
     # move PICKLE to product directory
     shutil.move('PICKLE', prod_dir)
@@ -639,150 +698,189 @@ def main():
        # ctx['swathnum'] = swathnum
         logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
 
-        # get radian value for 5-cm wrap
-        rt = parse('master/IW{}.xml'.format(swathnum))
-        wv = eval(rt.xpath('.//property[@name="radarwavelength"]/value/text()')[0])
-        rad = 4 * np.pi * .05 / wv
-        logger.info("Radian value for 5-cm wrap is: {}".format(rad))
-
-
-        # generate GDAL (ENVI) headers and move to product directory
-        for i in raster_prods:
-            # radar-coded products
-            call_noerr("isce2gis.py envi -i {}".format(i))
-            #call_noerr("gdal_translate {} {}.tif".format(i, i))
-            gdal_xml = "{}.xml".format(i)
-            gdal_hdr = "{}.hdr".format(i)
-            #gdal_tif = "{}.tif".format(i)
-            gdal_vrt = "{}.vrt".format(i)
-            if os.path.exists(i): shutil.move(i, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(i))
-            if os.path.exists(gdal_xml): shutil.move(gdal_xml, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_xml))
-            if os.path.exists(gdal_hdr): shutil.move(gdal_hdr, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_hdr))
-            #if os.path.exists(gdal_tif): shutil.move(gdal_tif, prod_merged_dir)
-            #else: logger.warn("{} wasn't generated.".format(gdal_tif))
-            if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_vrt))
-
-            # geo-coded products
-            j = "{}.geo".format(i)
-            if not os.path.exists(j): continue
-            call_noerr("isce2gis.py envi -i {}".format(j))
-            #call_noerr("gdal_translate {} {}.tif".format(j, j))
-            gdal_xml = "{}.xml".format(j)
-            gdal_hdr = "{}.hdr".format(j)
-            #gdal_tif = "{}.tif".format(j)
-            gdal_vrt = "{}.vrt".format(j)
-            if os.path.exists(j): shutil.move(j, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(j))
-            if os.path.exists(gdal_xml): shutil.move(gdal_xml, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_xml))
-            if os.path.exists(gdal_hdr): shutil.move(gdal_hdr, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_hdr))
-	    #if os.path.exists(gdal_tif): shutil.move(gdal_tif, prod_merged_dir)
-	    #else: logger.warn("{} wasn't generated.".format(gdal_tif))
-            if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
-            else: logger.warn("{} wasn't generated.".format(gdal_vrt))
-
-        # save other files to product directory
-        shutil.copyfile("_context.json", os.path.join(prod_dir,"{}.context.json".format(id)))
-        shutil.copyfile("topsApp.xml", os.path.join(prod_dir, "topsApp.xml"))
         shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "fine_interferogram.xml"))
         shutil.copyfile("master/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "master.xml"))
         shutil.copyfile("slave/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "slave.xml"))
-        if os.path.exists('topsProc.xml'):
-            shutil.copyfile("topsProc.xml", os.path.join(prod_dir, "topsProc.xml"))
-        if os.path.exists('isce.log'):
-            shutil.copyfile("isce.log", os.path.join(prod_dir, "isce.log"))
 
+   # move PICKLE to product directory
+    shutil.move('PICKLE', prod_dir)
     
-        # create browse images
-        os.chdir(prod_merged_dir)
-        mdx_app_path = "{}/applications/mdx.py".format(os.environ['ISCE_HOME'])
-        mdx_path = "{}/bin/mdx".format(os.environ['ISCE_HOME'])
-        from utils.createImage import createImage
-        unw_file = "filt_topophase.unw.geo"
-        #unwrapped image at different rates
-        createImage("{} -P {}".format(mdx_app_path, unw_file),unw_file)
-        createImage("{} -P {} -wrap {}".format(mdx_app_path, unw_file, rad),unw_file + "_5cm")
-        createImage("{} -P {} -wrap 20".format(mdx_app_path, unw_file),unw_file + "_20rad")
-        #amplitude image
-        unw_xml = "filt_topophase.unw.geo.xml"
-        rt = parse(unw_xml)
-        size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
-        rtlr = size * 4
-        logger.info("rtlr value for amplitude browse is: {}".format(rtlr))
-        createImage("{} -P {} -s {} -amp -r4 -rtlr {} -CW".format(mdx_path, unw_file, size, rtlr),'amplitude.geo')
-        #coherence image
-        top_file = "topophase.cor.geo"
-        createImage("{} -P {}".format(mdx_app_path, top_file),top_file)
-        #should be the same size as unw but just in case
-        top_xml = "topophase.cor.geo.xml"
-        rt = parse(top_xml)
-        size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
-        rhdr = size * 4
-        createImage("{} -P {} -s {} -r4 -rhdr {} -cmap cmy -wrap 1.2".format(mdx_path, top_file,size,rhdr),"topophase_ph_only.cor.geo")
+    # create browse images
+    os.chdir(prod_merged_dir)
+    mdx_app_path = "{}/applications/mdx.py".format(os.environ['ISCE_HOME'])
+    mdx_path = "{}/bin/mdx".format(os.environ['ISCE_HOME'])
+    from utils.createImage import createImage
+    unw_file = "filt_topophase.unw.geo"
+    #unwrapped image at different rates
+    createImage("{} -P {}".format(mdx_app_path, unw_file),unw_file)
+    createImage("{} -P {} -wrap {}".format(mdx_app_path, unw_file, rad),unw_file + "_5cm")
+    createImage("{} -P {} -wrap 20".format(mdx_app_path, unw_file),unw_file + "_20rad")
+    #amplitude image
+    unw_xml = "filt_topophase.unw.geo.xml"
+    rt = parse(unw_xml)
+    size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
+    rtlr = size * 4
+    logger.info("rtlr value for amplitude browse is: {}".format(rtlr))
+    createImage("{} -P {} -s {} -amp -r4 -rtlr {} -CW".format(mdx_path, unw_file, size, rtlr),'amplitude.geo')
+    #coherence image
+    top_file = "topophase.cor.geo"
+    createImage("{} -P {}".format(mdx_app_path, top_file),top_file)
+    #should be the same size as unw but just in case
+    top_xml = "topophase.cor.geo.xml"
+    rt = parse(top_xml)
+    size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
+    rhdr = size * 4
+    createImage("{} -P {} -s {} -r4 -rhdr {} -cmap cmy -wrap 1.2".format(mdx_path, top_file,size,rhdr),"topophase_ph_only.cor.geo")
 
 
-        # create unw KMZ
-        unw_kml = "unw.geo.kml"
-        unw_kmz = "{}.kmz".format(id)
-        call_noerr("{} {} -kml {}".format(mdx_app_path, unw_file, unw_kml))
-        call_noerr("{}/create_kmz.py {} {}.png {}".format(BASE_PATH, unw_kml, unw_file, unw_kmz))
+    '''
+    # unw browse
+    unw_file = "filt_topophase.unw.geo"
+    unw_browse_img = unw_file + ".browse.png"
+    unw_browse_img_small = unw_file + ".browse_small.png"
+    call_noerr("{} -P {}".format(mdx_app_path, unw_file))
+    call_noerr("convert out.ppm -transparent black -trim {}".format(unw_browse_img))
+    call_noerr("convert -resize 250x250 {} {}".format(unw_browse_img, unw_browse_img_small))
+    if os.path.exists('out.ppm'): os.unlink('out.ppm')
 
-        # move all browse images to root of product directory
-        call_noerr("mv -f *.png *.kmz ..")
+    # unw 5cm browse
+    unw_5cm_browse_img = "unw.geo_5cm.browse.png"
+    unw_5cm_browse_img_small = "unw.geo_5cm.browse_small.png"
+    call_noerr("{} -P {} -wrap {}".format(mdx_app_path, unw_file, rad))
+    call_noerr("convert out.ppm -transparent black -trim {}".format(unw_5cm_browse_img))
+    call_noerr("convert -resize 250x250 {} {}".format(unw_5cm_browse_img, unw_5cm_browse_img_small))
+    if os.path.exists('out.ppm'): os.unlink('out.ppm')
 
-        # remove kml
-        call_noerr("rm -f *.kml")
+    # unw 20rad browse
+    unw_20rad_browse_img = "unw.geo_20rad.browse.png"
+    unw_20rad_browse_img_small = "unw.geo_20rad.browse_small.png"
+    call_noerr("{} -P {} -wrap 20".format(mdx_app_path, unw_file))
+    call_noerr("convert out.ppm -transparent black -trim {}".format(unw_20rad_browse_img))
+    call_noerr("convert -resize 250x250 {} {}".format(unw_20rad_browse_img, unw_20rad_browse_img_small))
+    if os.path.exists('out.ppm'): os.unlink('out.ppm')
 
-        # chdir back up to work directory
-        os.chdir(cwd)
+    # amplitude browse
+    unw_xml = "filt_topophase.unw.geo.xml"
+    amplitude_browse_img = "amplitude.geo.browse.png"
+    amplitude_browse_img_small = "amplitude.geo.browse_small.png"
+    rt = parse(unw_xml)
+    size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
+    rtlr = size * 4
+    logger.info("rtlr value for amplitude browse is: {}".format(rtlr))
+    call_noerr("{} -P {} -s {} -amp -r4 -rtlr {} -CW".format(mdx_path, unw_file, size, rtlr))
+    call_noerr("convert out.ppm -transparent black -trim {}".format(amplitude_browse_img))
+    call_noerr("convert -resize 250x250 {} {}".format(amplitude_browse_img, amplitude_browse_img_small))
+    if os.path.exists('out.ppm'): os.unlink('out.ppm')
 
-        # create displacement tile layer
-        tiles_dir = "{}/tiles".format(prod_dir)
-        vrt_prod_file = "{}/merged/filt_topophase.unw.geo.vrt".format(prod_dir)
-        tiler_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', '..', 'map_tiler'))
-        dis_layer = "displacement"
-        tiler_cmd_tmpl = "{}/create_tiles.py {} {}/{} -b 2 -m prism --nodata 0"
-        check_call(tiler_cmd_tmpl.format(tiler_cmd_path, vrt_prod_file, tiles_dir, dis_layer), shell=True)
+    # topophase browse
+    top_file = "topophase.cor.geo"
+    top_browse_img = "top.geo.browse.png"
+    top_browse_img_small = "top.geo.browse_small.png"
+    call_noerr("{} -P {}".format(mdx_app_path, top_file))
+    call_noerr("convert out.ppm -transparent black -trim {}".format(top_browse_img))
+    call_noerr("convert -resize 250x250 {} {}".format(top_browse_img, top_browse_img_small))
+    if os.path.exists('out.ppm'): os.unlink('out.ppm')
+    '''
+    # create unw KMZ
+    unw_kml = "unw.geo.kml"
+    unw_kmz = "{}.kmz".format(id)
+    call_noerr("{} {} -kml {}".format(mdx_app_path, unw_file, unw_kml))
+    call_noerr("{}/create_kmz.py {} {}.png {}".format(BASE_PATH, unw_kml, unw_file, unw_kmz))
 
-        # create amplitude tile layer
-        amp_layer = "amplitude"
-        tiler_cmd_tmpl = "{}/create_tiles.py {} {}/{} -b 1 -m gray --clim_min 10 --clim_max_pct 80 --nodata 0"
-        check_call(tiler_cmd_tmpl.format(tiler_cmd_path, vrt_prod_file, tiles_dir, amp_layer), shell=True)
+    # move all browse images to root of product directory
+    call_noerr("mv -f *.png *.kmz ..")
 
-        # create COG (cloud optimized geotiff) with no_data set
-        cog_prod_file = "{}/merged/filt_topophase.unw.geo.tif".format(prod_dir)
-        cog_cmd_tmpl = "gdal_translate {} tmp.tif -co TILED=YES -co COMPRESS=DEFLATE -a_nodata 0"
-        check_call(cog_cmd_tmpl.format(vrt_prod_file), shell=True)
-        check_call("gdaladdo -r average tmp.tif 2 4 8 16 32", shell=True)
-        cog_cmd_tmpl = "gdal_translate tmp.tif {} -co TILED=YES -co COPY_SRC_OVERVIEWS=YES -co BLOCKXSIZE=512 -co BLOCKYSIZE=512 --config GDAL_TIFF_OVR_BLOCKSIZE 512"
-        check_call(cog_cmd_tmpl.format(cog_prod_file), shell=True)
-        os.unlink("tmp.tif")
+    # remove kml
+    call_noerr("rm -f *.kml")
 
-        if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
-            orbit_type = 'resorb'
-        else: orbit_type = 'poeorb'
-        scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
-        master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
-        slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
-        unw_vrt = "filt_topophase.unw.geo.vrt"
-        fine_int_xml = "fine_interferogram.xml"
+    # chdir back up to work directory
+    os.chdir(cwd)
 
-        # master/slave ids and orbits
+    # create displacement tile layer
+    tiles_dir = "{}/tiles".format(prod_dir)
+    vrt_prod_file = "{}/merged/filt_topophase.unw.geo.vrt".format(prod_dir)
+    tiler_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', '..', 'map_tiler'))
+    dis_layer = "displacement"
+    tiler_cmd_tmpl = "{}/create_tiles.py {} {}/{} -b 2 -m prism --nodata 0"
+    check_call(tiler_cmd_tmpl.format(tiler_cmd_path, vrt_prod_file, tiles_dir, dis_layer), shell=True)
 
-        master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
-        slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
-        master_rt = parse(os.path.join(prod_dir, "master.xml"))
-        master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-        slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
-        slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    # create amplitude tile layer
+    amp_layer = "amplitude"
+    tiler_cmd_tmpl = "{}/create_tiles.py {} {}/{} -b 1 -m gray --clim_min 10 --clim_max_pct 80 --nodata 0"
+    check_call(tiler_cmd_tmpl.format(tiler_cmd_path, vrt_prod_file, tiles_dir, amp_layer), shell=True)
+
+    # create COG (cloud optimized geotiff) with no_data set
+    cog_prod_file = "{}/merged/filt_topophase.unw.geo.tif".format(prod_dir)
+    cog_cmd_tmpl = "gdal_translate {} tmp.tif -co TILED=YES -co COMPRESS=DEFLATE -a_nodata 0"
+    check_call(cog_cmd_tmpl.format(vrt_prod_file), shell=True)
+    check_call("gdaladdo -r average tmp.tif 2 4 8 16 32", shell=True)
+    cog_cmd_tmpl = "gdal_translate tmp.tif {} -co TILED=YES -co COPY_SRC_OVERVIEWS=YES -co BLOCKXSIZE=512 -co BLOCKYSIZE=512 --config GDAL_TIFF_OVR_BLOCKSIZE 512"
+    check_call(cog_cmd_tmpl.format(cog_prod_file), shell=True)
+    os.unlink("tmp.tif")
+
+
+    # extract metadata from master
+    met_file = os.path.join(prod_dir, "{}.met.json".format(id))
+    extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
+                                                    '..', 'frameMetadata',
+                                                    'sentinel'))
+    extract_cmd_tmpl = "{}/extractMetadata_sp.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
+    check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
+                                       master_pol, met_file),shell=True)
+    
+    # update met JSON
+    if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
+        orbit_type = 'resorb'
+    else: orbit_type = 'poeorb'
+    scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
+    master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
+    slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
+    unw_vrt = "filt_topophase.unw.geo.vrt"
+    fine_int_xml = "fine_interferogram.xml"
+    update_met_cmd = "{}/update_met_json_sp.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
+    check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
+                                     ctx['swathnum'], master_mission,
+                                     slave_mission, prod_dir, 'PICKLE',
+                                     prod_dir, fine_int_xml,
+                                     prod_merged_dir, unw_vrt,
+                                     prod_merged_dir, unw_xml,
+                                     met_file), shell=True)
+
+    # add master/slave ids and orbits to met JSON (per ASF request)
+    master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
+    slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
+    master_rt = parse(os.path.join(prod_dir, "master.xml"))
+    master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
+    slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    with open(met_file) as f: md = json.load(f)
+    md['master_scenes'] = master_ids
+    md['slave_scenes'] = slave_ids
+    md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
+    if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
+    md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
+
+    # add range_looks and azimuth_looks to metadata for stitching purposes
+    md['azimuth_looks'] = int(ctx['azimuth_looks'])
+    md['range_looks'] = int(ctx['range_looks'])
+
+    # add filter strength
+    md['filter_strength'] = float(ctx['filter_strength'])
+
+    # add dem_type
+    md['dem_type'] = dem_type
+
+    # write met json
+    with open(met_file, 'w') as f: json.dump(md, f, indent=2)
+    
+    # generate dataset JSON
+    ds_file = os.path.join(prod_dir, "{}.dataset.json".format(id))
+    create_dataset_json(id, version, met_file, ds_file)
+
+    for swathnum in swath_list:
 
         met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
 
@@ -792,7 +890,7 @@ def main():
 
         extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
         check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       swathnum, master_pol, met_file),shell=True)   
+                                       swathnum, master_pol, met_file),shell=True)
 
         # update met JSON
         update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
@@ -803,6 +901,10 @@ def main():
                                      prod_merged_dir, unw_vrt,
                                      prod_merged_dir, unw_xml,
                                      met_file), shell=True)
+
+ 
+
+        # master/slave ids and orbits
 
         with open(met_file) as f: md = json.load(f)
         md['master_scenes'] = master_ids
@@ -832,12 +934,13 @@ def main():
         met_files.append(met_file)
     
     # create stitched dataset json
-    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format(id))
+    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format("stitched"))
     env, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
     
     # create stitched met json
-    met_json_file = os.path.join(prod_dir, "{}.met.json".format(id))
+    met_json_file = os.path.join(prod_dir, "{}.met.json".format("stitched"))
     create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
+
 
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
@@ -849,7 +952,7 @@ def main():
     #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
     
     # clean out SAFE directories and DEM files
-    for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
+    #for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
     for i in glob("dem*"): os.unlink(i)
 
 

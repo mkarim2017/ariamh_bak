@@ -273,4 +273,4 @@ if __name__ == '__main__':
         frame_infos.append(frameInfo)
         frameInfo.dump(met_file))
     
-    create_stitched_met_json(  frame_infos, inps.outjson):
+    create_stitched_met_json(  frame_infos, inps.outjson)
