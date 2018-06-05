@@ -822,65 +822,21 @@ def main():
     os.unlink("tmp.tif")
 
 
-    # extract metadata from master
-    met_file = os.path.join(prod_dir, "{}.met.json".format(id))
-    extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
-                                                    '..', 'frameMetadata',
-                                                    'sentinel'))
-    extract_cmd_tmpl = "{}/extractMetadata_sp.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
-    check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       master_pol, met_file),shell=True)
     
-    # update met JSON
-    if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
-        orbit_type = 'resorb'
-    else: orbit_type = 'poeorb'
-    scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
-    master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
-    slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
-    unw_vrt = "filt_topophase.unw.geo.vrt"
-    fine_int_xml = "fine_interferogram.xml"
-    update_met_cmd = "{}/update_met_json_sp.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
-    check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
-                                     ctx['swathnum'], master_mission,
-                                     slave_mission, prod_dir, 'PICKLE',
-                                     prod_dir, fine_int_xml,
-                                     prod_merged_dir, unw_vrt,
-                                     prod_merged_dir, unw_xml,
-                                     met_file), shell=True)
-
-    # add master/slave ids and orbits to met JSON (per ASF request)
-    master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
-    slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
-    master_rt = parse(os.path.join(prod_dir, "master.xml"))
-    master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-    slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
-    slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-    with open(met_file) as f: md = json.load(f)
-    md['master_scenes'] = master_ids
-    md['slave_scenes'] = slave_ids
-    md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
-    if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
-    md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
-
-    # add range_looks and azimuth_looks to metadata for stitching purposes
-    md['azimuth_looks'] = int(ctx['azimuth_looks'])
-    md['range_looks'] = int(ctx['range_looks'])
-
-    # add filter strength
-    md['filter_strength'] = float(ctx['filter_strength'])
-
-    # add dem_type
-    md['dem_type'] = dem_type
-
-    # write met json
-    with open(met_file, 'w') as f: json.dump(md, f, indent=2)
-    
-    # generate dataset JSON
-    ds_file = os.path.join(prod_dir, "{}.dataset.json".format(id))
-    create_dataset_json(id, version, met_file, ds_file)
 
     for swathnum in swath_list:
+       # ctx['swathnum'] = swathnum
+        fine_int_xml = "fine_interferogram_IW{}.xml".format(swathnum)
+        master_xml="master_IW{}.xml".format(swathnum)
+        slave_xml = "slave_IW{}.xml".format(swathnum)
+        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
+
+        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, fine_int_xml))
+        shutil.copyfile("master/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, master_xml))
+        shutil.copyfile("slave/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, slave_xml))
 
         met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
 
@@ -893,6 +849,16 @@ def main():
                                        swathnum, master_pol, met_file),shell=True)
 
         # update met JSON
+            # update met JSON
+        if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
+            orbit_type = 'resorb'
+        else: orbit_type = 'poeorb'
+        scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
+        master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
+        slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
+        unw_vrt = "filt_topophase.unw.geo.vrt"
+        #fine_int_xml = "fine_interferogram.xml"
+
         update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
         check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
                                      swathnum, master_mission,
@@ -903,9 +869,13 @@ def main():
                                      met_file), shell=True)
 
  
-
-        # master/slave ids and orbits
-
+        # add master/slave ids and orbits to met JSON (per ASF request)
+        master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
+        slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
+        master_rt = parse(os.path.join(prod_dir, master_xml))
+        master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+        slave_rt = parse(os.path.join(prod_dir, slave_xml))
+        slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
         with open(met_file) as f: md = json.load(f)
         md['master_scenes'] = master_ids
         md['slave_scenes'] = slave_ids
@@ -925,7 +895,7 @@ def main():
 
         # write met json
         with open(met_file, 'w') as f: json.dump(md, f, indent=2)
-    
+
         # generate dataset JSON
         ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id,swathnum))
         create_dataset_json(id, version, met_file, ds_file)
@@ -934,13 +904,16 @@ def main():
         met_files.append(met_file)
     
     # create stitched dataset json
-    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format("stitched"))
+    ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("stitched"))
     env, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
     
     # create stitched met json
     met_json_file = os.path.join(prod_dir, "{}.met.json".format("stitched"))
     create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
 
+    # generate dataset JSON
+    ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("Final"))
+    create_dataset_json(id, version, met_json_file, ds_json_file)
 
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
@@ -972,4 +945,3 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
-
