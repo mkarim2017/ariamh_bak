@@ -25,7 +25,7 @@ def cmdLineParse():
     parser = argparse.ArgumentParser(description='Extract metadata from S1 swath')
     #parser.add_argument('-i','--input', dest='inxml', type=str, required=True,
             #help='Swath XML file')a
-    parser.add_argument('xml_file', type=str, nargs='+', help='Swath XML file')
+    parser.add_argument('-i','--input', dest='xml_file', type=str, nargs='+', help='Swath XML file')
     parser.add_argument('-o', '--output', dest='outjson', type=str, required=True,
             help = 'Ouput met.json')
     return parser.parse_args()
@@ -259,9 +259,10 @@ if __name__ == '__main__':
     i=0
     for inxml in xml_files:
         i=i+1
-        met_file= "test_met"+i+".json"
+        met_file= "test_met%s.json"%(i)
         sar.xml = inxml
-	sar.parse()
+        print(inxml)
+        sar.parse()
         obj = objectify(inxml)
     
         ####Copy into ISCE Frame
@@ -271,6 +272,6 @@ if __name__ == '__main__':
         fie = FIE()
         frameInfo = fie.extractInfoFromFrame(frame.frame)
         frame_infos.append(frameInfo)
-        frameInfo.dump(met_file))
-    
+        frameInfo.dump(met_file)
+
     create_stitched_met_json(  frame_infos, inps.outjson)

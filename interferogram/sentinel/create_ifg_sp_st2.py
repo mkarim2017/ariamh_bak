@@ -311,6 +311,8 @@ def main():
     """HySDS PGE wrapper for TopsInSAR interferogram generation."""
 
     # save cwd (working directory)
+    complete_start_time=datetime.now()
+    logger.info("TopsApp End Time : {}".format(complete_start_time))
     cwd = os.getcwd()
 
     # get context
@@ -603,7 +605,7 @@ def main():
 
     #topsApp End Time
     topsApp_end_time=datetime.now() 
-    logger.info("TopsApp End Time : {}".format(topsApp_start_time))
+    logger.info("TopsApp End Time : {}".format(topsApp_end_time))
 
     topsApp_run_time=topsApp_end_time - topsApp_start_time
     logger.info("New TopsApp Run Time : {}".format(topsApp_run_time))
@@ -705,8 +707,6 @@ def main():
         shutil.copyfile("slave/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, "slave.xml"))
 
-   # move PICKLE to product directory
-    shutil.move('PICKLE', prod_dir)
     
     # create browse images
     os.chdir(prod_merged_dir)
@@ -955,6 +955,13 @@ def main():
     #for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
     for i in glob("dem*"): os.unlink(i)
 
+    #topsApp End Time
+    complete_end_time=datetime.now()
+    logger.info("TopsApp End Time : {}".format(complete_end_time))
+
+    complete_run_time=complete_end_time - complete_start_time
+    logger.info("New TopsApp Run Time : {}".format(complete_run_time))
+
 
 if __name__ == '__main__':
     try: status = main()
@@ -965,3 +972,4 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
+
