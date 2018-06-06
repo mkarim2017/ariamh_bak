@@ -312,7 +312,7 @@ def main():
 
     # save cwd (working directory)
     complete_start_time=datetime.now()
-    logger.info("Complete Start Time : {}".format(complete_start_time))
+    logger.info("TopsApp End Time : {}".format(complete_start_time))
     cwd = os.getcwd()
 
     # get context
@@ -327,7 +327,7 @@ def main():
     ctx['azimuth_looks'] = ctx.get("context", {}).get("azimuth_looks", 3)
     ctx['range_looks'] = ctx.get("context", {}).get("range_looks", 7)
     
-    ctx['swathnum'] = None
+    #ctx['swathnum'] = None
     # stitch all subswaths?
     ctx['stitch_subswaths_xt'] = False
     if ctx['swathnum'] is None:
@@ -609,19 +609,12 @@ def main():
 
     topsApp_run_time=topsApp_end_time - topsApp_start_time
     logger.info("New TopsApp Run Time : {}".format(topsApp_run_time))
-
-    swath_list = [1, 2, 3]
-    met_files=[]
-    ds_files=[]
-
-    # get radian value for 5-cm wrap. As it is same for all swath, we will use swathnum = 1
-    rt = parse('master/IW{}.xml'.format(1))
+   
+    # get radian value for 5-cm wrap
+    rt = parse('master/IW{}.xml'.format(ctx['swathnum']))
     wv = eval(rt.xpath('.//property[@name="radarwavelength"]/value/text()')[0])
     rad = 4 * np.pi * .05 / wv
     logger.info("Radian value for 5-cm wrap is: {}".format(rad))
-
-
-
 
     # create product directory
     prod_dir = id
@@ -630,7 +623,6 @@ def main():
     # create merged directory in product
     prod_merged_dir = os.path.join(prod_dir, 'merged')
     os.makedirs(prod_merged_dir, 0o755)
-
 
     # generate GDAL (ENVI) headers and move to product directory
     raster_prods = (
@@ -682,31 +674,22 @@ def main():
         if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
         else: logger.warn("{} wasn't generated.".format(gdal_vrt))
 
-
-
     # save other files to product directory
     shutil.copyfile("_context.json", os.path.join(prod_dir,"{}.context.json".format(id)))
     shutil.copyfile("topsApp.xml", os.path.join(prod_dir, "topsApp.xml"))
+    shutil.copyfile("fine_interferogram/IW{}.xml".format(ctx['swathnum']),
+                    os.path.join(prod_dir, "fine_interferogram.xml"))
+    shutil.copyfile("master/IW{}.xml".format(ctx['swathnum']),
+                    os.path.join(prod_dir, "master.xml"))
+    shutil.copyfile("slave/IW{}.xml".format(ctx['swathnum']),
+                    os.path.join(prod_dir, "slave.xml"))
     if os.path.exists('topsProc.xml'):
         shutil.copyfile("topsProc.xml", os.path.join(prod_dir, "topsProc.xml"))
     if os.path.exists('isce.log'):
         shutil.copyfile("isce.log", os.path.join(prod_dir, "isce.log"))
 
-
     # move PICKLE to product directory
     shutil.move('PICKLE', prod_dir)
-
-    for swathnum in swath_list:
-       # ctx['swathnum'] = swathnum
-        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
-
-        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "fine_interferogram.xml"))
-        shutil.copyfile("master/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "master.xml"))
-        shutil.copyfile("slave/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "slave.xml"))
-
     
     # create browse images
     os.chdir(prod_merged_dir)
@@ -821,100 +804,64 @@ def main():
     check_call(cog_cmd_tmpl.format(cog_prod_file), shell=True)
     os.unlink("tmp.tif")
 
-
-    
-
-    for swathnum in swath_list:
-       # ctx['swathnum'] = swathnum
-        fine_int_xml = "fine_interferogram_IW{}.xml".format(swathnum)
-        master_xml="master_IW{}.xml".format(swathnum)
-        slave_xml = "slave_IW{}.xml".format(swathnum)
-        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
-
-        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, fine_int_xml))
-        shutil.copyfile("master/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, master_xml))
-        shutil.copyfile("slave/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, slave_xml))
-
-        met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
-
-        extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..',
+    # extract metadata from master
+    met_file = os.path.join(prod_dir, "{}.met.json".format(id))
+    extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
                                                     '..', 'frameMetadata',
                                                     'sentinel'))
-
-        extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
-        check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       swathnum, master_pol, met_file),shell=True)
-
-        # update met JSON
-            # update met JSON
-        if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
-            orbit_type = 'resorb'
-        else: orbit_type = 'poeorb'
-        scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
-        master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
-        slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
-        unw_vrt = "filt_topophase.unw.geo.vrt"
-        #fine_int_xml = "fine_interferogram.xml"
-
-        update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
-        check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
-                                     swathnum, master_mission,
+    extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
+    check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
+                                       ctx['swathnum'], master_pol, met_file),shell=True)
+    
+    # update met JSON
+    if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
+        orbit_type = 'resorb'
+    else: orbit_type = 'poeorb'
+    scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
+    master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
+    slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
+    unw_vrt = "filt_topophase.unw.geo.vrt"
+    fine_int_xml = "fine_interferogram.xml"
+    update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
+    check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
+                                     ctx['swathnum'], master_mission,
                                      slave_mission, prod_dir, 'PICKLE',
                                      prod_dir, fine_int_xml,
                                      prod_merged_dir, unw_vrt,
                                      prod_merged_dir, unw_xml,
                                      met_file), shell=True)
 
- 
-        # add master/slave ids and orbits to met JSON (per ASF request)
-        master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
-        slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
-        master_rt = parse(os.path.join(prod_dir, master_xml))
-        master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-        slave_rt = parse(os.path.join(prod_dir, slave_xml))
-        slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-        with open(met_file) as f: md = json.load(f)
-        md['master_scenes'] = master_ids
-        md['slave_scenes'] = slave_ids
-        md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
-        if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
-        md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
+    # add master/slave ids and orbits to met JSON (per ASF request)
+    master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
+    slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
+    master_rt = parse(os.path.join(prod_dir, "master.xml"))
+    master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
+    slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    with open(met_file) as f: md = json.load(f)
+    md['master_scenes'] = master_ids
+    md['slave_scenes'] = slave_ids
+    md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
+    if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
+    md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
 
-        # add range_looks and azimuth_looks to metadata for stitching purposes
-        md['azimuth_looks'] = int(ctx['azimuth_looks'])
-        md['range_looks'] = int(ctx['range_looks'])
+    # add range_looks and azimuth_looks to metadata for stitching purposes
+    md['azimuth_looks'] = int(ctx['azimuth_looks'])
+    md['range_looks'] = int(ctx['range_looks'])
 
-        # add filter strength
-        md['filter_strength'] = float(ctx['filter_strength'])
+    # add filter strength
+    md['filter_strength'] = float(ctx['filter_strength'])
 
-        # add dem_type
-        md['dem_type'] = dem_type
+    # add dem_type
+    md['dem_type'] = dem_type
 
-        # write met json
-        with open(met_file, 'w') as f: json.dump(md, f, indent=2)
-
-        # generate dataset JSON
-        ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id,swathnum))
-        create_dataset_json(id, version, met_file, ds_file)
-        
-        ds_files.append(ds_file)
-        met_files.append(met_file)
+    # write met json
+    with open(met_file, 'w') as f: json.dump(md, f, indent=2)
     
-    # create stitched dataset json
-    ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("stitched"))
-    env, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
-    
-    # create stitched met json
-    met_json_file = os.path.join(prod_dir, "{}.met.json".format("stitched"))
-    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
-
     # generate dataset JSON
-    ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("Final"))
-    create_dataset_json(id, version, met_json_file, ds_json_file)
-
+    ds_file = os.path.join(prod_dir, "{}.dataset.json".format(id))
+    create_dataset_json(id, version, met_file, ds_file)
+    
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
     #shutil.rmtree(prod_merged_dir)
@@ -925,15 +872,8 @@ def main():
     #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
     
     # clean out SAFE directories and DEM files
-    #for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
+    for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
     for i in glob("dem*"): os.unlink(i)
-
-    #topsApp End Time
-    complete_end_time=datetime.now()
-    logger.info("Complete End Time : {}".format(complete_end_time))
-
-    complete_run_time=complete_end_time - complete_start_time
-    logger.info("New Complete Run Time : {}".format(complete_run_time))
 
 
 if __name__ == '__main__':
@@ -945,4 +885,3 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
-

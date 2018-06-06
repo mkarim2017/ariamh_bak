@@ -259,9 +259,9 @@ if __name__ == '__main__':
     i=0
     for inxml in xml_files:
         i=i+1
-        met_file= "test_met%s.json"%(i)
+        met_file= "test_met%s.json"%i
         sar.xml = inxml
-        print(inxml)
+	print("Extract Metadata : Processing %s" %inxml)
         sar.parse()
         obj = objectify(inxml)
     
