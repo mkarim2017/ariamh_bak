@@ -98,10 +98,10 @@ def get_aligned_bbox(prod, orb):
 
 
 def update_met_json(orbit_type, scene_count, swath_num, master_mission,
-                    slave_mission, pickle_dir, int_file, vrt_file, 
+                    slave_mission, pickle_dir, int_files, vrt_file, 
                     xml_file, json_file):
     """Write product metadata json."""
-
+    bboxes = []
     xml_file = os.path.abspath(xml_file)
     with open(xml_file) as f:
         doc = parse(f)
@@ -128,7 +128,9 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
 
     # get temporal_span
     temporal_span = getTemporalSpanInDays(sensing_stop, sensing_start)
+    
     #get polarization from ifg xml
+    int_file = int_files[0]
     try:
         fin = open(int_file, 'r')
         ifgxml = fin.read()
@@ -143,16 +145,23 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
     except Exception as e:
         logger.warn("Failed to get polarization: %s" % traceback.format_exc())
         polarization = 'ERR'
-    # load product and extract track-aligned bbox;
-    # fall back to raster corner coords (not track aligned)
-    try:
-        prod = load_product(int_file)
-        orb = get_orbit()
-        bbox = get_aligned_bbox(prod, orb)
-    except Exception as e:
-        logger.warn("Failed to get aligned bbox: %s" % traceback.format_exc())
-        logger.warn("Getting raster corner coords instead.")
-        bbox = get_raster_corner_coords(vrt_file)
+        # load product and extract track-aligned bbox;
+        # fall back to raster corner coords (not track aligned)
+    
+    bbox = None
+    for int_file in int_files:
+        try:
+            prod = load_product(int_file)
+            orb = get_orbit()
+            bbox_swath = get_aligned_bbox(prod, orb)
+        except Exception as e:
+            logger.warn("Failed to get aligned bbox: %s" % traceback.format_exc())
+            logger.warn("Getting raster corner coords instead.")
+            bbox_swath = get_raster_corner_coords(vrt_file)
+        if bbox is None:
+	    bbox = bbox_swath
+	else:
+	    bbox = bbox.Union(bbox_swath)
 
     #extract bperp and bpar
     cb_pkl = os.path.join(pickle_dir, "computeBaselines")
@@ -237,10 +246,10 @@ if __name__ == "__main__":
     master_mission = sys.argv[4]
     slave_mission = sys.argv[5]
     pickle_dir = sys.argv[6]
-    int_file = sys.argv[7]
+    int_files = sys.argv[7]
     vrt_file = sys.argv[8]
     xml_file = sys.argv[9]
     json_file = sys.argv[10]
     update_met_json(orbit_type, scene_count, swath_num, master_mission,
-                    slave_mission, pickle_dir, int_file, vrt_file,
+                    slave_mission, pickle_dir, int_files, vrt_file,
                     xml_file, json_file)

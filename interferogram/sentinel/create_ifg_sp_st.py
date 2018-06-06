@@ -7,11 +7,12 @@ from glob import glob
 from lxml.etree import parse
 import numpy as np
 from datetime import datetime
+from osgeo import ogr
 
 from utils.UrlUtils import UrlUtils
 from check_interferogram import check_int
 from create_input_xml import create_input_xml
-from osgeo import ogr
+
 
 log_format = "[%(asctime)s: %(levelname)s/%(funcName)s] %(message)s"
 logging.basicConfig(format=log_format, level=logging.INFO)
@@ -153,15 +154,14 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         [ env[2], env[0] ],
     ]
     met = {
-        #'stitch_direction': direction,
         'product_type': 'interferogram',
         'master_scenes': [],
         'refbbox': [],
         'esd_threshold': [],
         'frameID': [],
-        'temporal_span': None,
-        'swath': [],
-        'trackNumber': None,
+        'temporal_span': [],
+        'swath': [1, 2, 3],
+        'trackNumber': [],
         'archive_filename': id,
         'dataset_type': 'slc',
         'tile_layers': [ 'amplitude', 'displacement' ],
@@ -179,12 +179,12 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'bbox': bbox,
         'ogr_bbox': [[x, y] for y, x in bbox],
         'orbitNumber': [],
-        'inputFile': 'ifg_stitch.json',
+        'inputFile': '"sentinel.ini',
         'perpendicularBaseline': [],
         'orbitRepeat': [],
         'sensingStop': endtime,
         'polarization': [],
-        'scene_count': 0,
+        'scene_count': 1,
         'beamID': None,
         'sensor': [],
         'lookDirection': [],
@@ -197,6 +197,10 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'imageCorners': [],
         'direction': [],
         'prf': [],
+        'range_looks': [],
+        'dem_type': None,
+        'filter_strength': [],
+	'azimuth_looks': [],
         "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
     }
 
@@ -205,9 +209,9 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
                   'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
                   'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
                   'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'prf' )
-    single_params = ('temporal_span', 'trackNumber')
-    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline')
+                  'beamMode', 'direction', 'prf', 'azimuth_looks')
+    single_params = ('temporal_span', 'trackNumber', 'dem_type')
+    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
     mean_params = ('perpendicularBaseline', 'parallelBaseline')
     for i, met_file in enumerate(met_files):
         with open(met_file) as f:
@@ -307,6 +311,8 @@ def main():
     """HySDS PGE wrapper for TopsInSAR interferogram generation."""
 
     # save cwd (working directory)
+    complete_start_time=datetime.now()
+    logger.info("TopsApp End Time : {}".format(complete_start_time))
     cwd = os.getcwd()
 
     # get context
@@ -326,7 +332,7 @@ def main():
     ctx['stitch_subswaths_xt'] = False
     if ctx['swathnum'] is None:
         ctx['stitch_subswaths_xt'] = True
-        ctx['swathnum'] = 1
+        ctx['swathnum'] = [1, 2, 3]
         # use default azimuth and range looks for cross-swath stitching
         ctx['azimuth_looks'] = ctx.get("context", {}).get("azimuth_looks", 7)
         ctx['range_looks'] = ctx.get("context", {}).get("range_looks", 19)
@@ -383,10 +389,6 @@ def main():
         check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
                                     match_pol), shell=True)
     
-    bbox_cmd_tmpl = "{}/get_union_bbox.sh -o {} *.SAFE/annotation/s1?-iw{}-slc-{}-*.xml"
-    check_call(bbox_cmd_tmpl.format(BASE_PATH, bbox_json, ctx['swathnum'],
-                                    match_pol), shell=True)
-
     with open(bbox_json) as f:
         bbox = json.load(f)['envelope']
     logger.info("bbox: {}".format(bbox))
@@ -603,16 +605,23 @@ def main():
 
     #topsApp End Time
     topsApp_end_time=datetime.now() 
-    logger.info("TopsApp End Time : {}".format(topsApp_start_time))
+    logger.info("TopsApp End Time : {}".format(topsApp_end_time))
 
     topsApp_run_time=topsApp_end_time - topsApp_start_time
     logger.info("New TopsApp Run Time : {}".format(topsApp_run_time))
 
-    # get radian value for 5-cm wrap
-    rt = parse('master/IW{}.xml'.format(ctx['swathnum']))
+    swath_list = [1, 2, 3]
+    met_files=[]
+    ds_files=[]
+
+    # get radian value for 5-cm wrap. As it is same for all swath, we will use swathnum = 1
+    rt = parse('master/IW{}.xml'.format(1))
     wv = eval(rt.xpath('.//property[@name="radarwavelength"]/value/text()')[0])
     rad = 4 * np.pi * .05 / wv
     logger.info("Radian value for 5-cm wrap is: {}".format(rad))
+
+
+
 
     # create product directory
     prod_dir = id
@@ -621,6 +630,7 @@ def main():
     # create merged directory in product
     prod_merged_dir = os.path.join(prod_dir, 'merged')
     os.makedirs(prod_merged_dir, 0o755)
+
 
     # generate GDAL (ENVI) headers and move to product directory
     raster_prods = (
@@ -672,22 +682,38 @@ def main():
         if os.path.exists(gdal_vrt): shutil.move(gdal_vrt, prod_merged_dir)
         else: logger.warn("{} wasn't generated.".format(gdal_vrt))
 
+
+
     # save other files to product directory
     shutil.copyfile("_context.json", os.path.join(prod_dir,"{}.context.json".format(id)))
     shutil.copyfile("topsApp.xml", os.path.join(prod_dir, "topsApp.xml"))
-    shutil.copyfile("fine_interferogram/IW{}.xml".format(ctx['swathnum']),
-                    os.path.join(prod_dir, "fine_interferogram.xml"))
-    shutil.copyfile("master/IW{}.xml".format(ctx['swathnum']),
-                    os.path.join(prod_dir, "master.xml"))
-    shutil.copyfile("slave/IW{}.xml".format(ctx['swathnum']),
-                    os.path.join(prod_dir, "slave.xml"))
     if os.path.exists('topsProc.xml'):
         shutil.copyfile("topsProc.xml", os.path.join(prod_dir, "topsProc.xml"))
     if os.path.exists('isce.log'):
         shutil.copyfile("isce.log", os.path.join(prod_dir, "isce.log"))
 
+
     # move PICKLE to product directory
     shutil.move('PICKLE', prod_dir)
+
+    fine_int_xmls = []
+    for swathnum in swath_list:
+       # ctx['swathnum'] = swathnum
+        fine_int_xml = "fine_interferogram_IW{}.xml".format(swathnum)
+        master_xml="master_IW{}.xml".format(swathnum)
+        slave_xml = "slave_IW{}.xml".format(swathnum)
+
+        fine_int_xmls.append(os.path.join(prod_dir, fine_int_xml))
+
+        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
+
+        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, fine_int_xml))
+        shutil.copyfile("master/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, master_xml))
+        shutil.copyfile("slave/IW{}.xml".format(swathnum),
+                    os.path.join(prod_dir, slave_xml))
+
     
     # create browse images
     os.chdir(prod_merged_dir)
@@ -802,24 +828,17 @@ def main():
     check_call(cog_cmd_tmpl.format(cog_prod_file), shell=True)
     os.unlink("tmp.tif")
 
+
     # extract metadata from master
     met_file = os.path.join(prod_dir, "{}.met.json".format(id))
     extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
                                                     '..', 'frameMetadata',
                                                     'sentinel'))
-
-
-    '''
-    if ctx['stitch_subswaths_xt']:
-        extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
-        check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
+    extract_cmd_tmpl = "{}/extractMetadata_sp.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
+    check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
                                        master_pol, met_file),shell=True)
-    else:
-        extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
-        check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       ctx['swathnum'], master_pol, met_file),shell=True)
-    '''
-
+    
+    # update met JSON
     if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
         orbit_type = 'resorb'
     else: orbit_type = 'poeorb'
@@ -827,21 +846,49 @@ def main():
     master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
     slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
     unw_vrt = "filt_topophase.unw.geo.vrt"
-    fine_int_xml = "fine_interferogram.xml"
+    #fine_int_xml = "fine_interferogram.xml"
+    update_met_cmd = "{}/update_met_json_sp.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
+    check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
+                                     ctx['swathnum'], master_mission,
+                                     slave_mission, prod_dir, 'PICKLE',
+                                     prod_dir, fine_int_xmls,
+                                     prod_merged_dir, unw_vrt,
+                                     prod_merged_dir, unw_xml,
+                                     met_file), shell=True)
 
-    # master/slave ids and orbits
-
+    # add master/slave ids and orbits to met JSON (per ASF request)
     master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
     slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
-    master_rt = parse(os.path.join(prod_dir, "master.xml"))
+    master_rt = parse(os.path.join(prod_dir, master_xml))
     master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
-    slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
+    slave_rt = parse(os.path.join(prod_dir, slave_xml))
     slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    with open(met_file) as f: md = json.load(f)
+    md['master_scenes'] = master_ids
+    md['slave_scenes'] = slave_ids
+    md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
+    if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
+    md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
 
-    swathnum_list=[1,2,3]
-    met_files=[]
-    ds_files=[]
-    for swathnum in swathnum_list:
+    # add range_looks and azimuth_looks to metadata for stitching purposes
+    md['azimuth_looks'] = int(ctx['azimuth_looks'])
+    md['range_looks'] = int(ctx['range_looks'])
+
+    # add filter strength
+    md['filter_strength'] = float(ctx['filter_strength'])
+
+    # add dem_type
+    md['dem_type'] = dem_type
+
+    # write met json
+    with open(met_file, 'w') as f: json.dump(md, f, indent=2)
+    
+    # generate dataset JSON
+    ds_file = os.path.join(prod_dir, "{}.dataset.json".format(id))
+    create_dataset_json(id, version, met_file, ds_file)
+
+    for swathnum in swath_list:
+
         met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
 
         extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..',
@@ -850,7 +897,7 @@ def main():
 
         extract_cmd_tmpl = "{}/extractMetadata_s1.sh -i {}/annotation/s1?-iw{}-slc-{}-*.xml -o {}"
         check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
-                                       swathnum, master_pol, met_file),shell=True)   
+                                       swathnum, master_pol, met_file),shell=True)
 
         # update met JSON
         update_met_cmd = "{}/update_met_json.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
@@ -861,6 +908,10 @@ def main():
                                      prod_merged_dir, unw_vrt,
                                      prod_merged_dir, unw_xml,
                                      met_file), shell=True)
+
+ 
+
+        # master/slave ids and orbits
 
         with open(met_file) as f: md = json.load(f)
         md['master_scenes'] = master_ids
@@ -883,19 +934,20 @@ def main():
         with open(met_file, 'w') as f: json.dump(md, f, indent=2)
     
         # generate dataset JSON
-        ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id, swathnum))
+        ds_file = os.path.join(prod_dir, "{}_s{}.dataset.json".format(id,swathnum))
         create_dataset_json(id, version, met_file, ds_file)
         
         ds_files.append(ds_file)
         met_files.append(met_file)
     
     # create stitched dataset json
-    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format(id))
-    envelope, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
+    ds_json_file= os.path.join(prod_dir, "{}.dataset.json".format("stitched"))
+    env, starttime, endtime = create_stitched_dataset_json(id, version, ds_files, ds_json_file)      
     
     # create stitched met json
-    met_json_file = os.path.join(prod_dir, "{}.met.json".format(id))
-    create_stitched_met_json(id, version, envelope, starttime, endtime, met_files, met_json_file)
+    met_json_file = os.path.join(prod_dir, "{}.met.json".format("stitched"))
+    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
+
 
     # move merged products to root of product directory
     #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
@@ -907,8 +959,15 @@ def main():
     #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
     
     # clean out SAFE directories and DEM files
-    for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
+    #for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
     for i in glob("dem*"): os.unlink(i)
+
+    #topsApp End Time
+    complete_end_time=datetime.now()
+    logger.info("TopsApp End Time : {}".format(complete_end_time))
+
+    complete_run_time=complete_end_time - complete_start_time
+    logger.info("New TopsApp Run Time : {}".format(complete_run_time))
 
 
 if __name__ == '__main__':

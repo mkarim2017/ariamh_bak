@@ -838,6 +838,70 @@ def main():
         shutil.copyfile("slave/IW{}.xml".format(swathnum),
                     os.path.join(prod_dir, slave_xml))
 
+
+
+
+'''
+    # extract metadata from master
+    met_file = os.path.join(prod_dir, "{}.met.json".format(id))
+    extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
+                                                    '..', 'frameMetadata',
+                                                    'sentinel'))
+    extract_cmd_tmpl = "{}/extractMetadata_sp.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
+    check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
+                                       master_pol, met_file),shell=True)
+    
+    # update met JSON
+    if 'RESORB' in ctx['master_orbit_file'] or 'RESORB' in ctx['slave_orbit_file']:
+        orbit_type = 'resorb'
+    else: orbit_type = 'poeorb'
+    scene_count = min(len(master_safe_dirs), len(slave_safe_dirs))
+    master_mission = MISSION_RE.search(master_safe_dirs[0]).group(1)
+    slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
+    unw_vrt = "filt_topophase.unw.geo.vrt"
+    fine_int_xml = "fine_interferogram.xml"
+    update_met_cmd = "{}/update_met_json_sp.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
+    check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
+                                     ctx['swathnum'], master_mission,
+                                     slave_mission, prod_dir, 'PICKLE',
+                                     prod_dir, fine_int_xml,
+                                     prod_merged_dir, unw_vrt,
+                                     prod_merged_dir, unw_xml,
+                                     met_file), shell=True)
+
+    # add master/slave ids and orbits to met JSON (per ASF request)
+    master_ids = [i.replace(".zip", "") for i in ctx['master_zip_file']]
+    slave_ids = [i.replace(".zip", "") for i in ctx['slave_zip_file']]
+    master_rt = parse(os.path.join(prod_dir, "master.xml"))
+    master_orbit_number = eval(master_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    slave_rt = parse(os.path.join(prod_dir, "slave.xml"))
+    slave_orbit_number = eval(slave_rt.xpath('.//property[@name="orbitnumber"]/value/text()')[0])
+    with open(met_file) as f: md = json.load(f)
+    md['master_scenes'] = master_ids
+    md['slave_scenes'] = slave_ids
+    md['orbitNumber'] = [master_orbit_number, slave_orbit_number]
+    if ctx.get('stitch_subswaths_xt', False): md['swath'] = [1, 2, 3]
+    md['esd_threshold'] = esd_coh_th if do_esd else -1.  # add ESD coherence threshold
+
+    # add range_looks and azimuth_looks to metadata for stitching purposes
+    md['azimuth_looks'] = int(ctx['azimuth_looks'])
+    md['range_looks'] = int(ctx['range_looks'])
+
+    # add filter strength
+    md['filter_strength'] = float(ctx['filter_strength'])
+
+    # add dem_type
+    md['dem_type'] = dem_type
+
+    # write met json
+    with open(met_file, 'w') as f: json.dump(md, f, indent=2)
+    
+    # generate dataset JSON
+    ds_file = os.path.join(prod_dir, "{}.dataset.json".format(id))
+    create_dataset_json(id, version, met_file, ds_file)
+
+    for swathnum in swath_list:
+'''
         met_file = os.path.join(prod_dir, "{}_s{}.met.json".format(id, swathnum))
 
         extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..',
