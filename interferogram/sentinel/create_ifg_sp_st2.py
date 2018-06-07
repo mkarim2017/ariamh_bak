@@ -180,9 +180,11 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'trackNumber': [],
         'archive_filename': id,
         'dataset_type': 'slc',
-        'tile_layers': [ 'amplitude', 'displacement' ],
-        'latitudeIndexMin': int(math.floor(env[2] * 10)),
-        'latitudeIndexMax': int(math.ceil(env[3] * 10)),
+        'tile_layers': [],
+        #'latitudeIndexMin': int(math.floor(env[2] * 10)),
+        #'latitudeIndexMax': int(math.ceil(env[3] * 10)),
+        'latitudeIndexMin': [],
+        'latitudeIndexMax': [],
         'parallelBaseline': [],
         'url': [],
         'doppler': [],
@@ -198,9 +200,9 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'inputFile': '"sentinel.ini',
         'perpendicularBaseline': [],
         'orbitRepeat': [],
-        'sensingStop': endtime,
+        'sensingStop': [],
         'polarization': [],
-        'scene_count': 1,
+        'scene_count': 0,
         'beamID': None,
         'sensor': [],
         'lookDirection': [],
@@ -208,7 +210,7 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'startingRange': [],
         'frameName': [],
         'tiles': True,
-        'sensingStart': starttime,
+        'sensingStart': [],
         'beamMode': [],
         'imageCorners': [],
         'direction': [],
@@ -222,31 +224,21 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
 
     
     # collect values
-    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
-                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
-                  'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf', 'azimuth_looks')
-    single_params = ('temporal_span', 'trackNumber', 'dem_type')
-    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
-    mean_params = ('perpendicularBaseline', 'parallelBaseline')
 
-    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
-                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
-                  'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf', 'azimuth_looks', 'trackNumber',
-                  'tile_layers', 'perpendicularBaseline', 'imageCorners',
-                  'latitudeIndexMin', 'temporal_span', 'url', 'platfrom')
+    set_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline', 'version', 'parallelBaseline',
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                'swath', 'slave_scenes', 'master_scenes', 'latitudeIndexMax', 'sensingStop',   
+                'startingRange', 'sensingStart' )
 
     single_params = ('filter_strength', 'frameID',  'esd_threshold', 'sensor', 'beamID', 'frameNumber',
                     'inputFile', 'azimuth_looks', 'dataset_type', 'reference', 'archive_filename',
                     'direction', 'tiles', 'beamMode', 'orbitRepeat', 'range_looks', 'lookDirection',
-                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type' )
+                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type')
 
     list_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline', 'version', 'parallelBaseline',
-                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platfrom', 'orbitNumber',
-                 'swath', 'slave_scenes', 'master_scenes')
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                'swath', 'slave_scenes', 'master_scenes', 'latitudeIndexMax', 'sensingStop',  
+                'startingRange', 'sensingStart' )
 
     mean_params = ('perpendicularBaseline', 'parallelBaseline', 'temporal_span', 'prf', 'doppler')
 
@@ -258,7 +250,7 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         with open(met_file) as f:
             md = json.load(f)
         for param in set_params:
-            #logger.info("param: {}".format(param))
+            logger.info(" set param: {}".format(param))
             if isinstance(md[param], list):
                 met[param].extend(md[param])
             else:
@@ -268,17 +260,27 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
                 met[param] = md[param]
         met['scene_count'] += 1
     for param in set_params:
+        logger.info("param: {}".format(param))
         tmp_met = list(set(met[param]))
         if param in list_params:
             met[param] = tmp_met
         else:
             met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
     for param in mean_params:
+        logger.info("mean param: {}".format(param))
         met[param] = np.mean(met[param])
     for param in min_params:
-        met[param] = met[param].sort()[0]
+        logger.info("param: {}".format(param))
+        if met[param] is None:
+            logger.info("Missing Min Param : %s" %param)
+        else:
+            met[param] = met[param].sort()[0]
     for param in max_params:
-        met[param] = met[param].sort()[-1]
+        logger.info("param: {}".format(param))
+        if met[param] is None:
+            logger.info("Missing Max Param : %s" %param)
+        else:
+            met[param] = met[param].sort()[-1]
     
     met['imageCorners'] = get_image_corners(met['imageCorners'])
     
@@ -342,31 +344,18 @@ def create_stitched_met_json2(id,  met_files, met_json_file):
     }
 
     # collect values
-    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
-                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
-                  'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf', 'azimuth_looks')
-    single_params = ('temporal_span', 'trackNumber', 'dem_type')
-    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
-    mean_params = ('perpendicularBaseline', 'parallelBaseline')
-
-    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
-                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
-                  'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf', 'azimuth_looks', 'trackNumber',
-                  'tile_layers', 'perpendicularBaseline',
-                  'latitudeIndexMin', 'temporal_span', 'url', 'platfrom')
+    set_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline',  'parallelBaseline',
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                 'swath', 'slave_scenes', 'master_scenes', 'startingRange', 'sensingStart', 'latitudeIndexMax', 'sensingStop')
 
     single_params = ('filter_strength', 'frameID',  'esd_threshold', 'sensor', 'beamID', 'frameNumber',
                     'inputFile', 'azimuth_looks', 'dataset_type', 'reference', 'archive_filename',
                     'direction', 'tiles', 'beamMode', 'orbitRepeat', 'range_looks', 'lookDirection',
-                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type' )
+                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type', 'version' )
 
-    list_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline', 'version', 'parallelBaseline',
-                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platfrom', 'orbitNumber',
-                 'swath', 'slave_scenes', 'master_scenes')
+    list_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline',  'parallelBaseline',
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                 'swath', 'slave_scenes', 'master_scenes', 'startingRange', 'sensingStart', 'latitudeIndexMax', 'sensingStop')
 
     mean_params = ('perpendicularBaseline', 'parallelBaseline', 'temporal_span', 'prf', 'doppler')
 
@@ -407,6 +396,137 @@ def create_stitched_met_json2(id,  met_files, met_json_file):
     # write out dataset json
     with open(met_json_file, 'w') as f:
         json.dump(met, f, indent=2)
+
+
+
+def create_stitched_dataset_json(id, version, ds_files, ds_json_file):
+    """Create HySDS dataset json file."""
+
+    # get union polygon
+    location, env = get_union_polygon(ds_files)
+    logger.info("union polygon: {}.".format(json.dumps(location, indent=2, sort_keys=True)))
+
+    # get starttime and endtimes
+    starttimes, endtimes = get_times(ds_files)
+    starttimes.sort()
+    endtimes.sort()
+    starttime = starttimes[0]
+    endtime = endtimes[-1]
+
+    # build dataset
+    ds = {
+        'creation_timestamp': "%sZ" % datetime.utcnow().isoformat(),
+        'version': version,
+        'label': id,
+        'location': location,
+        'starttime': starttime,
+        'endtime': endtime,
+    }
+
+    # write out dataset json
+    with open(ds_json_file, 'w') as f:
+        json.dump(ds, f, indent=2)
+
+    # return envelope and times
+    return env, starttime, endtime
+
+
+def create_stitched_met_json3(id, version, env, starttime, endtime, met_files, met_json_file):
+    """Create HySDS met json file."""
+
+    # build met
+    bbox = [
+        [ env[3], env[0] ],
+        [ env[3], env[1] ],
+        [ env[2], env[1] ],
+        [ env[2], env[0] ],
+    ]
+    met = {
+        'product_type': 'interferogram',
+        'master_scenes': [],
+        'refbbox': [],
+        'esd_threshold': [],
+        'frameID': [],
+        'temporal_span': [],
+        'swath': [1, 2, 3],
+        'trackNumber': [],
+        'archive_filename': id,
+        'dataset_type': 'slc',
+        'tile_layers': [ 'amplitude', 'displacement' ],
+        'latitudeIndexMin': int(math.floor(env[2] * 10)),
+        'latitudeIndexMax': int(math.ceil(env[3] * 10)),
+        'parallelBaseline': [],
+        'url': [],
+        'doppler': [],
+        'version': [],
+        'slave_scenes': [],
+        'orbit_type': [],
+        'spacecraftName': [],
+        'frameNumber': None,
+        'reference': None,
+        'bbox': bbox,
+        'ogr_bbox': [[x, y] for y, x in bbox],
+        'orbitNumber': [],
+        'inputFile': '"sentinel.ini',
+        'perpendicularBaseline': [],
+        'orbitRepeat': [],
+        'sensingStop': endtime,
+        'polarization': [],
+        'scene_count': 0,
+        'beamID': None,
+        'sensor': [],
+        'lookDirection': [],
+        'platform': [],
+        'startingRange': [],
+        'frameName': [],
+        'tiles': True,
+        'sensingStart': starttime,
+        'beamMode': [],
+        'imageCorners': [],
+        'direction': [],
+        'prf': [],
+        'range_looks': [],
+        'dem_type': None,
+        'filter_strength': [],
+	'azimuth_looks': [],
+        "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
+    }
+
+    # collect values
+    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
+                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
+                  'sensor', 'lookDirection', 'platform', 'startingRange',
+                  'beamMode', 'direction', 'prf', 'azimuth_looks')
+    single_params = ('temporal_span', 'trackNumber', 'dem_type')
+    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
+    mean_params = ('perpendicularBaseline', 'parallelBaseline')
+    for i, met_file in enumerate(met_files):
+        with open(met_file) as f:
+            md = json.load(f)
+        for param in set_params:
+            #logger.info("param: {}".format(param))
+            if isinstance(md[param], list):
+                met[param].extend(md[param])
+            else:
+                met[param].append(md[param])
+        if i == 0:
+            for param in single_params:
+                met[param] = md[param]
+        met['scene_count'] += 1
+    for param in set_params:
+        tmp_met = list(set(met[param]))
+        if param in list_params:
+            met[param] = tmp_met
+        else:
+            met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
+    for param in mean_params:
+        met[param] = np.mean(met[param])
+
+    # write out dataset json
+    with open(met_json_file, 'w') as f:
+        json.dump(met, f, indent=2)
+
 
 def ifg_exists(es_url, es_index, id):
     """Check interferogram exists in GRQ."""
@@ -450,22 +570,34 @@ def get_polarization(id):
     else: raise RuntimeError("Unrecognized polarization: %s" % pp)
 
 def move_dem_separate_dir (dir_name):
-    if os.path.isdir(dir_name):
-        rmdir_cmd=["rm", "-rf", dir_name]
-        rmdir_cmd_line=" ".join(rmdir_cmd)
-        logger.info("Calling {}".format(rmdir_cmd_line))
-        check_call(rmdir_cmd_line, shell=True)
-
-    mkdir_cmd=["mkdir", dir_name]
-    mkdir_cmd_line=" ".join(mkdir_cmd)
-    logger.info("Calling {}".format(mkdir_cmd_line))
-    check_call(mkdir_cmd_line, shell=True)
+    create_dir(dir_name)
 
     move_cmd=["mv", "demLat*", dir_name]
     move_cmd_line=" ".join(move_cmd)
     logger.info("Calling {}".format(move_cmd_line))
-    check_call(move_cmd_line, shell=True)
+    call_noerr(move_cmd_line)
 
+    move_cmd=["mv", "stitched.*", dir_name]
+    move_cmd_line=" ".join(move_cmd)
+    logger.info("Calling {}".format(move_cmd_line))
+    call_noerr(move_cmd_line)
+
+    move_cmd=["mv", "*DEM.vrt", dir_name]
+    move_cmd_line=" ".join(move_cmd)
+    logger.info("Calling {}".format(move_cmd_line))
+    call_noerr(move_cmd_line)
+
+def create_dir(dir_name):
+    if os.path.isdir(dir_name):
+        rmdir_cmd=["rm", "-rf", dir_name]
+        rmdir_cmd_line=" ".join(rmdir_cmd)
+        logger.info("Calling {}".format(rmdir_cmd_line))
+        call_noerr(rmdir_cmd_line)
+
+    mkdir_cmd=["mkdir", dir_name]
+    mkdir_cmd_line=" ".join(mkdir_cmd)
+    logger.info("Calling {}".format(mkdir_cmd_line))
+    call_noerr(mkdir_cmd_line)
 
 def call_noerr(cmd):
     """Run command and warn if exit status is not 0."""
@@ -517,10 +649,11 @@ def main():
 
     # unzip SAFE dirs
     master_safe_dirs = []
+   
     for i in ctx['master_zip_file']:
         logger.info("Unzipping {}.".format(i))
-        with ZipFile(i, 'r') as zf:
-            zf.extractall()
+        #with ZipFile(i, 'r') as zf:
+            #zf.extractall()
         logger.info("Removing {}.".format(i))
         try: os.unlink(i)
         except: pass
@@ -528,8 +661,8 @@ def main():
     slave_safe_dirs = []
     for i in ctx['slave_zip_file']:
         logger.info("Unzipping {}.".format(i))
-        with ZipFile(i, 'r') as zf:
-            zf.extractall()
+        #with ZipFile(i, 'r') as zf:
+            #zf.extractall()
         logger.info("Removing {}.".format(i))
         try: os.unlink(i)
         except: pass
@@ -594,13 +727,14 @@ def main():
     '''
     # get DEM configuration
     dem_type = ctx.get("context", {}).get("dem_type", "SRTM+v3")
+    #dem_type = "NED1"
     dem_url = uu.dem_url
     srtm3_dem_url = uu.srtm3_dem_url
     ned1_dem_url = uu.ned1_dem_url
     ned13_dem_url = uu.ned13_dem_url
     dem_user = uu.dem_u
     dem_pass = uu.dem_p
-
+    print("DEM Type : %s" %dem_type)
     preprocess_dem_dir="preprocess_dem"
     geocode_dem_dir="geocode_dem"
 
@@ -654,7 +788,8 @@ def main():
 
     move_dem_separate_dir(preprocess_dem_dir)
     preprocess_dem_file = os.path.join(preprocess_dem_dir, preprocess_dem_file)
-
+    
+    
     # fix file path in Preprocess DEM xml
     fix_cmd = [
         "{}/applications/fixImageXml.py".format(os.environ['ISCE_HOME']),
@@ -663,22 +798,48 @@ def main():
     fix_cmd_line = " ".join(fix_cmd)
     logger.info("Calling fixImageXml.py: {}".format(fix_cmd_line))
     check_call(fix_cmd_line, shell=True)
-    
+    '''    
+    if dem_type.startswith("SRTM"):
+        geocode_dem_url = srtm3_dem_url
+        dem_cmd = [
+            "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
+            "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
+            "-r", "-s", "3", "-f", "-x", "-c", "-n", dem_user, "-w", dem_pass,
+            "-u", geocode_dem_url
+        ]
+        dem_cmd_line = " ".join(dem_cmd)
+        logger.info("Calling dem.py: {}".format(dem_cmd_line))
+        check_call(dem_cmd_line, shell=True)
+        geocode_dem_file = glob("*.dem.wgs84")[0]
+    '''
 
-    geocode_dem_url = srtm3_dem_url
+    preprocess_vrt_file=""
+    if dem_type.startswith("SRTM"):
+        preprocess_vrt_file = glob(os.path.join(preprocess_dem_dir, "*.dem.wgs84.vrt"))[0]
+    elif dem_type.startswith("NED1"):
+        preprocess_vrt_file = os.path.join(preprocess_dem_dir, "combinedDEM.vrt")
+        print("preprocess_vrt_file : %s"%preprocess_vrt_file)
+    else: raise RuntimeError("Unknown dem type %s." % dem_type)
+
+    if not os.path.isfile(preprocess_vrt_file):
+        print("%s does not exists. Exiting")
+    
+    geocode_dem_dir = os.path.join(preprocess_dem_dir, "Coarse_preprocess_dem")
+    create_dir(geocode_dem_dir)
+
     dem_cmd = [
-        "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
-        "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
-        "-r", "-s", "3", "-f", "-x", "-c", "-n", dem_user, "-w", dem_pass,
-        "-u", geocode_dem_url
+        "{}/applications/downsampleDEM.py".format(os.environ['ISCE_HOME']), "-i",
+        "{}".format(preprocess_vrt_file), "-r", "90"
     ]
     dem_cmd_line = " ".join(dem_cmd)
-    logger.info("Calling dem.py: {}".format(dem_cmd_line))
+    logger.info("Calling downsampleDEM.py: {}".format(dem_cmd_line))
     check_call(dem_cmd_line, shell=True)
-    geocode_dem_file = glob("*.dem.wgs84")[0]
-    
-    move_dem_separate_dir(geocode_dem_dir)
-    geocode_dem_file = os.path.join(geocode_dem_dir, geocode_dem_file)
+    geocode_dem_file = ""
+
+    if dem_type.startswith("SRTM"):
+        geocode_dem_file = glob(os.path.join(geocode_dem_dir, "*.dem.wgs84"))[0]
+    elif dem_type.startswith("NED1"):
+        geocode_dem_file = os.path.join(geocode_dem_dir, "combinedDEM")
     logger.info("Using Geocode DEM file: {}".format(geocode_dem_file))
 
 
@@ -1056,7 +1217,12 @@ def main():
     
     # create stitched met json
     met_json_file = os.path.join(prod_dir, "{}.met.json".format("stitched"))
-    create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
+    try:
+        create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file)
+    except Exception as e:
+        print("FAILED creating stitched met.json : %s" %e)
+        print(traceback.format_exc())
+        create_stitched_met_json3(id, version, env, starttime, endtime, met_files, met_json_file)
 
     # generate dataset JSON
     ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("Final"))
@@ -1103,3 +1269,4 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
+
