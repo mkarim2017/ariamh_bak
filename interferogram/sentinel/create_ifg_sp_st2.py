@@ -142,6 +142,22 @@ def create_stitched_dataset_json(id, version, ds_files, ds_json_file):
     # return envelope and times
     return env, starttime, endtime
 
+def get_image_corners(image_corner_list):
+    minLons = []
+    minLats = []
+    maxLons = []
+    maxLats = []
+    imageCorners = {}
+    for image_corner in image_corner_list:
+        minLons.append(image_corner["minLon"])
+        minLats.append(image_corner["minLat"])
+        maxLons.append(image_corner["maxLon"])
+        maxLats.append(image_corner["maxLat"])
+    imageCorners["minLon"] = minLons.sort()[0]
+    imageCorners["minLat"] = minLats.sort()[0]
+    imageCorners["maxLon"] = maxLons.sort()[-1]
+    imageCorners["maxLat"] = maxLats.sort()[-1]
+
 
 def create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file):
     """Create HySDS met json file."""
@@ -200,19 +216,44 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
         'range_looks': [],
         'dem_type': None,
         'filter_strength': [],
-	'azimuth_looks': [],
+	    'azimuth_looks': [],
         "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
     }
 
+    
     # collect values
     set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
                   'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
                   'sensor', 'lookDirection', 'platform', 'startingRange',
                   'beamMode', 'direction', 'prf', 'azimuth_looks')
     single_params = ('temporal_span', 'trackNumber', 'dem_type')
     list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
     mean_params = ('perpendicularBaseline', 'parallelBaseline')
+
+    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
+                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
+                  'sensor', 'lookDirection', 'platform', 'startingRange',
+                  'beamMode', 'direction', 'prf', 'azimuth_looks', 'trackNumber',
+                  'tile_layers', 'perpendicularBaseline', 'imageCorners',
+                  'latitudeIndexMin', 'temporal_span', 'url', 'platfrom')
+
+    single_params = ('filter_strength', 'frameID',  'esd_threshold', 'sensor', 'beamID', 'frameNumber',
+                    'inputFile', 'azimuth_looks', 'dataset_type', 'reference', 'archive_filename',
+                    'direction', 'tiles', 'beamMode', 'orbitRepeat', 'range_looks', 'lookDirection',
+                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type' )
+
+    list_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline', 'version', 'parallelBaseline',
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platfrom', 'orbitNumber',
+                 'swath', 'slave_scenes', 'master_scenes')
+
+    mean_params = ('perpendicularBaseline', 'parallelBaseline', 'temporal_span', 'prf', 'doppler')
+
+    min_params = ('latitudeIndexMin', 'startingRange', 'sensingStart' )
+    max_params = ('latitudeIndexMax', 'sensingStop')
+    
+
     for i, met_file in enumerate(met_files):
         with open(met_file) as f:
             md = json.load(f)
@@ -234,6 +275,134 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
             met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
     for param in mean_params:
         met[param] = np.mean(met[param])
+    for param in min_params:
+        met[param] = met[param].sort()[0]
+    for param in max_params:
+        met[param] = met[param].sort()[-1]
+    
+    met['imageCorners'] = get_image_corners(met['imageCorners'])
+    
+    # write out dataset json
+    with open(met_json_file, 'w') as f:
+        json.dump(met, f, indent=2)
+
+
+def create_stitched_met_json2(id,  met_files, met_json_file):
+    """Create HySDS met json file."""
+
+    met = {
+        'product_type': 'interferogram',
+        'master_scenes': [],
+        'refbbox': [],
+        'esd_threshold': [],
+        'frameID': [],
+        'temporal_span': [],
+        'swath': [1, 2, 3],
+        'trackNumber': [],
+        'archive_filename': id,
+        'dataset_type': [],
+        'tile_layers': [],
+        'latitudeIndexMin': [],
+        'latitudeIndexMax': [],
+        'parallelBaseline': [],
+        'url': [],
+        'doppler': [],
+        'version': [],
+        'slave_scenes': [],
+        'orbit_type': [],
+        'spacecraftName': [],
+        'frameNumber': None,
+        'reference': None,
+        'bbox': [],
+        'ogr_bbox': [],
+        'orbitNumber': [],
+        'inputFile': '"sentinel.ini',
+        'perpendicularBaseline': [],
+        'orbitRepeat': [],
+        'sensingStop': [],
+        'polarization': [],
+        'scene_count': 0,
+        'beamID': None,
+        'sensor': [],
+        'lookDirection': [],
+        'platform': [],
+        'startingRange': [],
+        'frameName': [],
+        'tiles': True,
+        'sensingStart': [],
+        'beamMode': [],
+        'imageCorners': [],
+        'direction': [],
+        'prf': [],
+        'range_looks': [],
+        'dem_type': None,
+        'filter_strength': [],
+	'azimuth_looks': [],
+        "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
+    }
+
+    # collect values
+    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
+                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
+                  'sensor', 'lookDirection', 'platform', 'startingRange',
+                  'beamMode', 'direction', 'prf', 'azimuth_looks')
+    single_params = ('temporal_span', 'trackNumber', 'dem_type')
+    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
+    mean_params = ('perpendicularBaseline', 'parallelBaseline')
+
+    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
+                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
+                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization',
+                  'sensor', 'lookDirection', 'platform', 'startingRange',
+                  'beamMode', 'direction', 'prf', 'azimuth_looks', 'trackNumber',
+                  'tile_layers', 'perpendicularBaseline',
+                  'latitudeIndexMin', 'temporal_span', 'url', 'platfrom')
+
+    single_params = ('filter_strength', 'frameID',  'esd_threshold', 'sensor', 'beamID', 'frameNumber',
+                    'inputFile', 'azimuth_looks', 'dataset_type', 'reference', 'archive_filename',
+                    'direction', 'tiles', 'beamMode', 'orbitRepeat', 'range_looks', 'lookDirection',
+                    'orbit_type', 'frameName', 'polarization', 'product_type', 'dem_type' )
+
+    list_params=('spacecraftName', 'tile_layers', 'perpendicularBaseline', 'version', 'parallelBaseline',
+                'latitudeIndexMin', 'temporal_span', 'url', 'prf', 'doppler', 'platfrom', 'orbitNumber',
+                 'swath', 'slave_scenes', 'master_scenes')
+
+    mean_params = ('perpendicularBaseline', 'parallelBaseline', 'temporal_span', 'prf', 'doppler')
+
+    min_params = ('latitudeIndexMin', 'startingRange', 'sensingStart' )
+    max_params = ('latitudeIndexMax', 'sensingStop')
+
+
+
+    for i, met_file in enumerate(met_files):
+        with open(met_file) as f:
+            md = json.load(f)
+        for param in set_params:
+            #logger.info("param: {}".format(param))
+            if isinstance(md[param], list):
+                met[param].extend(md[param])
+            else:
+                met[param].append(md[param])
+        if i == 0:
+            for param in single_params:
+                met[param] = md[param]
+        met['scene_count'] += 1
+
+    for param in set_params:
+        tmp_met = list(set(met[param]))
+        if param in list_params:
+            met[param] = tmp_met
+        else:
+            met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
+
+    for param in mean_params:
+        met[param] = np.mean(met[param])
+    for param in min_params:
+        met[param] = met[param].sort()[0]
+    for param in max_params:
+        met[param] = met[param].sort()[-1]
+
 
     # write out dataset json
     with open(met_json_file, 'w') as f:
@@ -696,17 +865,6 @@ def main():
     # move PICKLE to product directory
     shutil.move('PICKLE', prod_dir)
 
-    for swathnum in swath_list:
-       # ctx['swathnum'] = swathnum
-        logger.info("\n\nPROCESSING SWATH : {}".format(swathnum))
-
-        shutil.copyfile("fine_interferogram/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "fine_interferogram.xml"))
-        shutil.copyfile("master/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "master.xml"))
-        shutil.copyfile("slave/IW{}.xml".format(swathnum),
-                    os.path.join(prod_dir, "slave.xml"))
-
     
     # create browse images
     os.chdir(prod_merged_dir)
@@ -760,17 +918,6 @@ def main():
     call_noerr("{} -P {} -wrap 20".format(mdx_app_path, unw_file))
     call_noerr("convert out.ppm -transparent black -trim {}".format(unw_20rad_browse_img))
     call_noerr("convert -resize 250x250 {} {}".format(unw_20rad_browse_img, unw_20rad_browse_img_small))
-    if os.path.exists('out.ppm'): os.unlink('out.ppm')
-
-    # amplitude browse
-    unw_xml = "filt_topophase.unw.geo.xml"
-    amplitude_browse_img = "amplitude.geo.browse.png"
-    amplitude_browse_img_small = "amplitude.geo.browse_small.png"
-    rt = parse(unw_xml)
-    size = eval(rt.xpath('.//component[@name="coordinate1"]/property[@name="size"]/value/text()')[0])
-    rtlr = size * 4
-    logger.info("rtlr value for amplitude browse is: {}".format(rtlr))
-    call_noerr("{} -P {} -s {} -amp -r4 -rtlr {} -CW".format(mdx_path, unw_file, size, rtlr))
     call_noerr("convert out.ppm -transparent black -trim {}".format(amplitude_browse_img))
     call_noerr("convert -resize 250x250 {} {}".format(amplitude_browse_img, amplitude_browse_img_small))
     if os.path.exists('out.ppm'): os.unlink('out.ppm')
@@ -923,6 +1070,17 @@ def main():
     #${BASE_PATH}/create_prov_es-create_interferogram.sh $id $project $master_orbit_file $slave_orbit_file \
     #                                                        ${preprocess_dem_file}.xml $preprocess_dem_file $WORK_DIR \
     #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
+    ds_json_file= os.path.join(prod_dir, "{}.datasea.json".format("Final"))
+    create_dataset_json(id, version, met_json_file, ds_json_file)
+
+    # move merged products to root of product directory
+    #call_noerr("mv -f {}/* {}".format(prod_merged_dir, prod_dir))
+    #shutil.rmtree(prod_merged_dir)
+
+    # write PROV-ES JSON
+    #${BASE_PATH}/create_prov_es-create_interferogram.sh $id $project $master_orbit_file $slave_orbit_file \
+    #                                                        ${preprocess_dem_file}.xml $preprocess_dem_file $WORK_DIR \
+    #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
     
     # clean out SAFE directories and DEM files
     #for i in chain(master_safe_dirs, slave_safe_dirs): shutil.rmtree(i)
@@ -945,4 +1103,3 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
-

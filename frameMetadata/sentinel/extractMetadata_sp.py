@@ -253,12 +253,12 @@ if __name__ == '__main__':
     inps = cmdLineParse()
 
     #Read in metadata
-    sar = Sentinel1_TOPS()
     xml_files=inps.xml_file
     frame_infos=[]
     i=0
     for inxml in xml_files:
         i=i+1
+	sar = Sentinel1_TOPS()
         met_file= "test_met%s.json"%i
         sar.xml = inxml
 	print("Extract Metadata : Processing %s" %inxml)
@@ -275,3 +275,4 @@ if __name__ == '__main__':
         frameInfo.dump(met_file)
 
     create_stitched_met_json(  frame_infos, inps.outjson)
+
