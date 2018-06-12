@@ -280,23 +280,36 @@ def get_polarization(id):
     elif pp == "SH": return "hh"
     else: raise RuntimeError("Unrecognized polarization: %s" % pp)
 
-def move_dem_separate_dir (dir_name):
-    if os.path.isdir(dir_name):
-        rmdir_cmd=["rm", "-rf", dir_name]
-        rmdir_cmd_line=" ".join(rmdir_cmd)
-        logger.info("Calling {}".format(rmdir_cmd_line))
-        check_call(rmdir_cmd_line, shell=True)
 
-    mkdir_cmd=["mkdir", dir_name]
-    mkdir_cmd_line=" ".join(mkdir_cmd)
-    logger.info("Calling {}".format(mkdir_cmd_line))
-    check_call(mkdir_cmd_line, shell=True)
+def move_dem_separate_dir (dir_name):
+    create_dir(dir_name)
 
     move_cmd=["mv", "demLat*", dir_name]
     move_cmd_line=" ".join(move_cmd)
     logger.info("Calling {}".format(move_cmd_line))
-    check_call(move_cmd_line, shell=True)
+    call_noerr(move_cmd_line)
 
+    move_cmd=["mv", "stitched.*", dir_name]
+    move_cmd_line=" ".join(move_cmd)
+    logger.info("Calling {}".format(move_cmd_line))
+    call_noerr(move_cmd_line)
+
+    move_cmd=["mv", "*DEM.vrt", dir_name]
+    move_cmd_line=" ".join(move_cmd)
+    logger.info("Calling {}".format(move_cmd_line))
+    call_noerr(move_cmd_line)
+
+def create_dir(dir_name):
+    if os.path.isdir(dir_name):
+        rmdir_cmd=["rm", "-rf", dir_name]
+        rmdir_cmd_line=" ".join(rmdir_cmd)
+        logger.info("Calling {}".format(rmdir_cmd_line))
+        call_noerr(rmdir_cmd_line)
+
+    mkdir_cmd=["mkdir", dir_name]
+    mkdir_cmd_line=" ".join(mkdir_cmd)
+    logger.info("Calling {}".format(mkdir_cmd_line))
+    call_noerr(mkdir_cmd_line)
 
 def call_noerr(cmd):
     """Run command and warn if exit status is not 0."""
@@ -495,7 +508,7 @@ def main():
     logger.info("Calling fixImageXml.py: {}".format(fix_cmd_line))
     check_call(fix_cmd_line, shell=True)
     
-
+    '''
     geocode_dem_url = srtm3_dem_url
     dem_cmd = [
         "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
@@ -510,6 +523,36 @@ def main():
     
     move_dem_separate_dir(geocode_dem_dir)
     geocode_dem_file = os.path.join(geocode_dem_dir, geocode_dem_file)
+    logger.info("Using Geocode DEM file: {}".format(geocode_dem_file))
+    '''
+
+    preprocess_vrt_file=""
+    if dem_type.startswith("SRTM"):
+        preprocess_vrt_file = glob(os.path.join(preprocess_dem_dir, "*.dem.wgs84.vrt"))[0]
+    elif dem_type.startswith("NED1"):
+        preprocess_vrt_file = os.path.join(preprocess_dem_dir, "combinedDEM.vrt")
+        print("preprocess_vrt_file : %s"%preprocess_vrt_file)
+    else: raise RuntimeError("Unknown dem type %s." % dem_type)
+
+    if not os.path.isfile(preprocess_vrt_file):
+        print("%s does not exists. Exiting")
+    
+    geocode_dem_dir = os.path.join(preprocess_dem_dir, "Coarse_preprocess_dem")
+    create_dir(geocode_dem_dir)
+
+    dem_cmd = [
+        "{}/applications/downsampleDEM.py".format(os.environ['ISCE_HOME']), "-i",
+        "{}".format(preprocess_vrt_file), "-r", "90"
+    ]
+    dem_cmd_line = " ".join(dem_cmd)
+    logger.info("Calling downsampleDEM.py: {}".format(dem_cmd_line))
+    check_call(dem_cmd_line, shell=True)
+    geocode_dem_file = ""
+
+    if dem_type.startswith("SRTM"):
+        geocode_dem_file = glob(os.path.join(geocode_dem_dir, "*.dem.wgs84"))[0]
+    elif dem_type.startswith("NED1"):
+        geocode_dem_file = os.path.join(geocode_dem_dir, "combinedDEM")
     logger.info("Using Geocode DEM file: {}".format(geocode_dem_file))
 
 
@@ -847,11 +890,11 @@ def main():
     slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
     unw_vrt = "filt_topophase.unw.geo.vrt"
     #fine_int_xml = "fine_interferogram.xml"
-    update_met_cmd = "{}/update_met_json_sp.py {} {} {} {} {} {}/{} {}/{} {}/{} {}/{} {}"
+    update_met_cmd = '{}/update_met_json_sp.py {} {} "{}" {} {} {}/{} "{}" {}/{} {}/{} {}'
     check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
                                      ctx['swathnum'], master_mission,
                                      slave_mission, prod_dir, 'PICKLE',
-                                     prod_dir, fine_int_xmls,
+                                     fine_int_xmls,
                                      prod_merged_dir, unw_vrt,
                                      prod_merged_dir, unw_xml,
                                      met_file), shell=True)

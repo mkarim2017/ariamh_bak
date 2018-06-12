@@ -4,13 +4,13 @@ import isce
 from isceobj.Scene.Frame import Frame
 from isceobj.Planet.AstronomicalHandbook import Const
 from isceobj.Planet.Planet import Planet
-
 from Sentinel1_TOPS import Sentinel1_TOPS
 import argparse
-import os, re
 from lxml import objectify as OBJ
 from FrameInfoExtractor import FrameInfoExtractor as FIE
-
+import numpy as np
+from osgeo import ogr, osr
+import os, sys, re, requests, json, shutil, traceback, logging, hashlib, math
 
 DATASETTYPE_RE = re.compile(r'-(raw|slc)-')
 
@@ -159,86 +159,180 @@ class S1toFrame(object):
         if match: self.frame.datasetType = 'slc'
         else: self.frame.datasetType = ''
 
-def create_stitched_met_json(  met_files, met_json_file):
+
+def get_loc(frameInfo, bbox_type):
+    """Return GeoJSON bbox."""
+
+    bbox = np.array(frameInfo.getBBox()).astype(np.float)
+    print("get_loc : %s" %bbox)
+    if bbox_type == "refbbox":
+        bbox = np.array(frameInfo.getReferenceBBox()).astype(np.float)
+    coords = [
+        [ bbox[0,1], bbox[0,0] ],
+        [ bbox[1,1], bbox[1,0] ],
+        [ bbox[3,1], bbox[3,0] ],
+        [ bbox[2,1], bbox[2,0] ],
+        [ bbox[0,1], bbox[0,0] ],
+    ]
+    return {
+        "type": "Polygon",
+        "coordinates":  [coords] 
+    }
+
+def set_value(param, value):
+    try:
+        param = value
+        print("set value of %s is %s" %(param, value))
+    except Exception as e:
+        print(traceback.format_exc())
+
+
+def get_union_geom(frame_infoes, bbox_type):
+    geom_union = None
+    for frameInfo in frame_infoes:
+        loc = get_loc(frameInfo, bbox_type)
+        geom = ogr.CreateGeometryFromJson(json.dumps(loc))
+        print("get_union_geom : geom : %s" %get_union_geom)
+        if geom_union is None:
+            geom_union = geom
+        else:
+            geom_union = geom_union.Union(geom)
+    return geom_union
+
+
+def create_stitched_met_json( frame_infoes, met_json_file):
     """Create HySDS met json file."""
 
     # build met
+    bbox = json.loads(get_union_geom(frame_infoes, "bbox").ExportToJson())["coordinates"][0]
+    print("create_stitched_met_json : bbox : %s" %bbox)
+    refbbox = json.loads(get_union_geom(frame_infoes, "refbbox").ExportToJson())["coordinates"][0]
+    print("create_stitched_met_json : refbbox : %s" %refbbox)
     met = {
         'product_type': 'interferogram',
-        'master_scenes': [],
-        'refbbox': [],
-        'esd_threshold': [],
+        #'master_scenes': [],
+        'refbbox': refbbox,
+        #'esd_threshold': [],
         'frameID': [],
-        'temporal_span': [],
-        'swath': [1, 2, 3],
+        #'temporal_span': [],
+        #'swath': [1, 2, 3],
         'trackNumber': [],
+        #'archive_filename': id,
         'dataset_type': 'slc',
-        'tile_layers': [ 'amplitude', 'displacement' ],
-        'parallelBaseline': [],
+        'tile_layers': [],
+        #'latitudeIndexMin': int(math.floor(env[2] * 10)),
+        #'latitudeIndexMax': int(math.ceil(env[3] * 10)),
+        'latitudeIndexMin': [],
+        'latitudeIndexMax': [],
+        #'parallelBaseline': [],
         'url': [],
         'doppler': [],
-        'slave_scenes': [],
-        'orbit_type': [],
-        'spacecraftName': [],
+        #'version': [],
+        #'slave_scenes': [],
+        #'orbit_type': [],
+        #'spacecraftName': [],
         'frameNumber': None,
         'reference': None,
         'bbox': bbox,
-        'ogr_bbox': [[x, y] for y, x in bbox],
+        'ogr_bbox': [],
         'orbitNumber': [],
-        'inputFile': '"sentinel.ini',
-        'perpendicularBaseline': [],
+        #'inputFile': 'sentinel.ini',
+        #'perpendicularBaseline': [],
         'orbitRepeat': [],
-        'polarization': [],
-        'scene_count': 1,
+        'sensingStop': [],
+        #'polarization': [],
+        #'scene_count': 0,
         'beamID': None,
         'sensor': [],
         'lookDirection': [],
         'platform': [],
         'startingRange': [],
         'frameName': [],
-        'tiles': True,
-        'beamMode': [],
-        'imageCorners': [],
+        #'tiles': True,
+        'sensingStart': [],
+        #'beamMode': [],
+        #'imageCorners': [],
         'direction': [],
         'prf': [],
-        'range_looks': [],
-        'dem_type': None,
-        'filter_strength': [],
-	'azimuth_looks': [],
-        "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest(),
+        #'range_looks': [],
+        #'dem_type': None,
+        #'filter_strength': [],
+	#'azimuth_looks': [],
+        "sha224sum": hashlib.sha224(str.encode(os.path.basename(met_json_file))).hexdigest()
     }
 
+    
     # collect values
-    set_params = ('master_scenes', 'esd_threshold', 'frameID', 'swath', 'parallelBaseline',
-                  'doppler', 'version', 'slave_scenes', 'orbit_type', 'spacecraftName',
-                  'orbitNumber', 'perpendicularBaseline', 'orbitRepeat', 'polarization', 
-                  'sensor', 'lookDirection', 'platform', 'startingRange',
-                  'beamMode', 'direction', 'prf', 'azimuth_looks')
-    single_params = ('temporal_span', 'trackNumber', 'dem_type')
-    list_params = ('platform', 'swath', 'perpendicularBaseline', 'parallelBaseline', 'range_looks','filter_strength')
-    mean_params = ('perpendicularBaseline', 'parallelBaseline')
-    for i, met_file in enumerate(met_files):
-        with open(met_file) as f:
-            md = json.load(f)
+
+    set_params=('tile_layers', 
+                'latitudeIndexMin',  'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                'latitudeIndexMax', 'sensingStop', 'startingRange', 'sensingStart'
+		#'master_scenes', 'temporal_span', 'swath'
+               )
+
+    single_params = ('frameID', 'sensor', 'beamID', 'frameNumber',
+                      'dataset_type', 'reference', 'archive_filename',
+                     'direction', 'orbitRepeat', 'lookDirection','frameName', 'product_type'
+                    #,'esd_threshold'
+                    )
+    list_params=( 'tile_layers', 'latitudeIndexMin',  'url', 'prf', 'doppler', 'platform', 'orbitNumber',
+                'latitudeIndexMax', 'sensingStop', 'startingRange', 'sensingStart'
+                #'master_scenes', temporal_span' , 'swath'
+                 )
+
+    mean_params = ( 'prf', 'doppler')
+
+    min_params = ('latitudeIndexMin', 'startingRange', 'sensingStart' )
+    max_params = ('latitudeIndexMax', 'sensingStop')
+    
+
+    for i, frame_info in enumerate(frame_infoes):
+        md = frame_info.toDict()
+        
         for param in set_params:
-            #logger.info("param: {}".format(param))
+            if param not in md:
+                continue
+            print(" set param: {}".format(param))
             if isinstance(md[param], list):
                 met[param].extend(md[param])
             else:
                 met[param].append(md[param])
         if i == 0:
             for param in single_params:
-                met[param] = md[param]
-        met['scene_count'] += 1
+                if param in md:
+                    met[param] = md[param]
+        ##met['scene_count'] += 1
     for param in set_params:
+        print("param: {}".format(param))
         tmp_met = list(set(met[param]))
         if param in list_params:
             met[param] = tmp_met
         else:
             met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
     for param in mean_params:
+        print("mean param: %s type : %s " %(param, type(param)))
         met[param] = np.mean(met[param])
-
+    for param in min_params:
+        print("min param: %s type : %s " %(param, type(param)))
+        if met[param] is None:
+            print("Missing Min Param : %s" %param)
+        else:
+            print(met[param])
+            met[param] = min(met[param])
+    for param in max_params:
+        print("max param: %s type : %s " %(param, type(param)))
+        if met[param] is None:
+            print("Missing Max Param : %s" %param)
+        else:
+            print(met[param])
+            met[param] = max(met[param])
+    
+    #met['imageCorners'] = get_image_corners(met['imageCorners'])
+    try:
+        met['ogr_bbox'] =[[[x, y] for y, x in box] for box in bbox][0]
+    except Exception as e:
+        print(traceback.format_exc())
+	
     # write out dataset json
     with open(met_json_file, 'w') as f:
         json.dump(met, f, indent=2)
@@ -258,10 +352,10 @@ if __name__ == '__main__':
     i=0
     for inxml in xml_files:
         i=i+1
-	sar = Sentinel1_TOPS()
+        sar = Sentinel1_TOPS()
         met_file= "test_met%s.json"%i
         sar.xml = inxml
-	print("Extract Metadata : Processing %s" %inxml)
+        print("Extract Metadata : Processing %s" %inxml)
         sar.parse()
         obj = objectify(inxml)
     
@@ -271,8 +365,9 @@ if __name__ == '__main__':
         ####Frameinfoextractor
         fie = FIE()
         frameInfo = fie.extractInfoFromFrame(frame.frame)
+        print("printing FramInfo :\n")
+        print(frameInfo)
         frame_infos.append(frameInfo)
         frameInfo.dump(met_file)
 
     create_stitched_met_json(  frame_infos, inps.outjson)
-

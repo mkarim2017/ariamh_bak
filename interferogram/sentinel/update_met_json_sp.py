@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, json, re, math, logging, traceback, pickle, hashlib
+import ast, os, sys, json, re, math, logging, traceback, pickle, hashlib
 from lxml.etree import parse
 from osgeo import gdal
 import numpy as np
@@ -101,6 +101,8 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
                     slave_mission, pickle_dir, int_files, vrt_file, 
                     xml_file, json_file):
     """Write product metadata json."""
+    print("update_met_json : swath_num : %s type : %s" %(swath_num, type(swath_num)))
+    print("update_met_json : int_files : %s : %s" %(int_files, type(int_files)))
     bboxes = []
     xml_file = os.path.abspath(xml_file)
     with open(xml_file) as f:
@@ -159,9 +161,9 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
             logger.warn("Getting raster corner coords instead.")
             bbox_swath = get_raster_corner_coords(vrt_file)
         if bbox is None:
-	    bbox = bbox_swath
-	else:
-	    bbox = bbox.Union(bbox_swath)
+            bbox = bbox_swath
+        else:
+            bbox = bbox.Union(bbox_swath)
 
     #extract bperp and bpar
     cb_pkl = os.path.join(pickle_dir, "computeBaselines")
@@ -238,18 +240,29 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 11:
-        raise SystemExit("usage: %s <orbit type used> <scene count> <swath num> <master_mission> <slave_mission> <pickle dir> <fine int file> <vrt file> <unw.geo.xml file> <output json file>" % sys.argv[0])
+    print("update met arg count : %s" %len(sys.argv))
+    #if len(sys.argv) != 11:
+    #    raise SystemExit("usage: %s <orbit type used> <scene count> <swath num> <master_mission> <slave_mission> <pickle dir> <fine int file> <vrt file> <unw.geo.xml file> <output json file>" % sys.argv[0])
     orbit_type = sys.argv[1]
+    print("orbit_type :%s"%orbit_type)
     scene_count = sys.argv[2]
-    swath_num = sys.argv[3]
+    print("scene_count : %s"%scene_count)
+    swath_num = ast.literal_eval(sys.argv[3])
+    print("swath_num : %s "%swath_num)
     master_mission = sys.argv[4]
+    print("master_mission : %s "%master_mission)
     slave_mission = sys.argv[5]
+    print("slave_mission : %s"%slave_mission)
     pickle_dir = sys.argv[6]
-    int_files = sys.argv[7]
+    print("pickle_dir : %s"%pickle_dir)
+    int_files = ast.literal_eval(sys.argv[7])
+    print("int_files %s"%int_files)
     vrt_file = sys.argv[8]
+    print("vrt_file : %s"%vrt_file)
     xml_file = sys.argv[9]
+    print("xml_file : %s"%xml_file)
     json_file = sys.argv[10]
+    print("json_file : %s"%json_file)
     update_met_json(orbit_type, scene_count, swath_num, master_mission,
                     slave_mission, pickle_dir, int_files, vrt_file,
                     xml_file, json_file)
