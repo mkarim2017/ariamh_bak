@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
 import ast, os, sys, json, re, math, logging, traceback, pickle, hashlib
 from lxml.etree import parse
-from osgeo import gdal
+from osgeo import gdal, ogr, osr
 import numpy as np
-
 import isce
 from iscesys.Component.ProductManager import ProductManager as PM
 from isceobj.Orbit.Orbit import Orbit
@@ -96,6 +94,34 @@ def get_aligned_bbox(prod, orb):
     bbox = pos[[0, 1, 3, 2], 0:2]
     return bbox.tolist()
 
+def get_loc(box):
+    """Return GeoJSON bbox."""
+    bbox = np.array(box).astype(np.float)
+    coords = [
+        [ bbox[0,1], bbox[0,0] ],
+        [ bbox[1,1], bbox[1,0] ],
+        [ bbox[3,1], bbox[3,0] ],
+        [ bbox[2,1], bbox[2,0] ],
+        [ bbox[0,1], bbox[0,0] ],
+    ]
+    return {
+        "type": "Polygon",
+        "coordinates":  [coords] 
+    }
+
+
+def get_union_geom(bbox_list):
+    geom_union = None
+    for bbox in bbox_list:
+        loc = get_loc(bbox)
+        geom = ogr.CreateGeometryFromJson(json.dumps(loc))
+        print("get_union_geom : geom : %s" %get_union_geom)
+        if geom_union is None:
+            geom_union = geom
+        else:
+            geom_union = geom_union.Union(geom)
+    print("geom_union_type : %s" %type(geom_union)) 
+    return geom_union
 
 def update_met_json(orbit_type, scene_count, swath_num, master_mission,
                     slave_mission, pickle_dir, int_files, vrt_file, 
@@ -160,10 +186,9 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
             logger.warn("Failed to get aligned bbox: %s" % traceback.format_exc())
             logger.warn("Getting raster corner coords instead.")
             bbox_swath = get_raster_corner_coords(vrt_file)
-        if bbox is None:
-            bbox = bbox_swath
-        else:
-            bbox = bbox.Union(bbox_swath)
+        print("bbox_swath : %s" %bbox_swath)
+        bboxes.append(bbox_swath)
+    bbox = json.loads(get_union_geom(bboxes).ExportToJson())["coordinates"][0]
 
     #extract bperp and bpar
     cb_pkl = os.path.join(pickle_dir, "computeBaselines")

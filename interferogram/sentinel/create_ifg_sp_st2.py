@@ -153,10 +153,10 @@ def get_image_corners(image_corner_list):
         minLats.append(image_corner["minLat"])
         maxLons.append(image_corner["maxLon"])
         maxLats.append(image_corner["maxLat"])
-    imageCorners["minLon"] = minLons.sort()[0]
-    imageCorners["minLat"] = minLats.sort()[0]
-    imageCorners["maxLon"] = maxLons.sort()[-1]
-    imageCorners["maxLat"] = maxLats.sort()[-1]
+    imageCorners["minLon"] = min(minLons)
+    imageCorners["minLat"] = min(minLats)
+    imageCorners["maxLon"] = max(maxLons)
+    imageCorners["maxLat"] = max(maxLats)
 
 
 def create_stitched_met_json(id, version, env, starttime, endtime, met_files, met_json_file):
@@ -266,24 +266,30 @@ def create_stitched_met_json(id, version, env, starttime, endtime, met_files, me
             met[param] = tmp_met
         else:
             met[param] = tmp_met[0] if len(tmp_met) == 1 else tmp_met
+
     for param in mean_params:
-        logger.info("mean param: {}".format(param))
+        print("mean param: %s type : %s " %(param, type(param)))
         met[param] = np.mean(met[param])
     for param in min_params:
-        logger.info("param: {}".format(param))
+        print("min param: %s type : %s " %(param, type(param)))
         if met[param] is None:
-            logger.info("Missing Min Param : %s" %param)
+            print("Missing Min Param : %s" %param)
         else:
-            met[param] = met[param].sort()[0]
+            print(met[param])
+            met[param] = min(met[param])
     for param in max_params:
-        logger.info("param: {}".format(param))
+        print("max param: %s type : %s " %(param, type(param)))
         if met[param] is None:
-            logger.info("Missing Max Param : %s" %param)
+            print("Missing Max Param : %s" %param)
         else:
-            met[param] = met[param].sort()[-1]
-    
-    met['imageCorners'] = get_image_corners(met['imageCorners'])
-    
+            print(met[param])
+            met[param] = max(met[param])
+
+    try:    
+        met['imageCorners'] = get_image_corners(met['imageCorners'])
+    except:
+        print("failed to create Image Corner")
+
     # write out dataset json
     with open(met_json_file, 'w') as f:
         json.dump(met, f, indent=2)
@@ -388,9 +394,9 @@ def create_stitched_met_json2(id,  met_files, met_json_file):
     for param in mean_params:
         met[param] = np.mean(met[param])
     for param in min_params:
-        met[param] = met[param].sort()[0]
+        met[param] = min(met[param])
     for param in max_params:
-        met[param] = met[param].sort()[-1]
+        met[param] = max(met[param])
 
 
     # write out dataset json
@@ -652,8 +658,8 @@ def main():
    
     for i in ctx['master_zip_file']:
         logger.info("Unzipping {}.".format(i))
-        #with ZipFile(i, 'r') as zf:
-            #zf.extractall()
+        with ZipFile(i, 'r') as zf:
+            zf.extractall()
         logger.info("Removing {}.".format(i))
         try: os.unlink(i)
         except: pass
@@ -661,8 +667,8 @@ def main():
     slave_safe_dirs = []
     for i in ctx['slave_zip_file']:
         logger.info("Unzipping {}.".format(i))
-        #with ZipFile(i, 'r') as zf:
-            #zf.extractall()
+        with ZipFile(i, 'r') as zf:
+            zf.extractall()
         logger.info("Removing {}.".format(i))
         try: os.unlink(i)
         except: pass
@@ -1269,4 +1275,3 @@ if __name__ == '__main__':
             f.write("%s\n" % traceback.format_exc())
         raise
     sys.exit(status)
-

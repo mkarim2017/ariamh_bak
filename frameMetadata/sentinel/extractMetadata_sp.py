@@ -197,6 +197,7 @@ def get_union_geom(frame_infoes, bbox_type):
             geom_union = geom
         else:
             geom_union = geom_union.Union(geom)
+    print("extract data geom_union type : %s" %type(geom_union))
     return geom_union
 
 
