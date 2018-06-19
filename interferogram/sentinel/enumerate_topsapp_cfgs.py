@@ -498,6 +498,431 @@ def get_pair_direction(ctx, param):
     else: raise RuntimeError("Invalid pair direction %s." % pd)
 
 
+def get_topsapp_cfgs_standard_process(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
+    """Return all possible topsApp configurations."""
+    # get context
+    with open(context_file) as f:
+        context = json.load(f)
+
+    # get args
+    project = context['project']
+    sso = get_bool_param(context, 'singlesceneOnly')
+    auto_bbox = get_bool_param(context, 'auto_bbox')
+    precise_orbit_only = get_bool_param(context, 'precise_orbit_only')
+    query = context['query']
+
+    # pair direction:
+    #   forward => reference scene is slave
+    #   backward => reference scene is master
+    pre_ref_pd = get_pair_direction(context, 'preReferencePairDirection')
+    pre_search = False if pre_ref_pd == 'none' else True
+    post_ref_pd = get_pair_direction(context, 'postReferencePairDirection')
+    post_search = False if post_ref_pd == 'none' else True
+
+    # overwrite temporal baseline from context
+    if 'temporalBaseline' in context:
+        temporalBaseline = int(context['temporalBaseline'])
+
+    # overwrite minMatch
+    if 'minMatch' in context:
+        minMatch = int(context['minMatch'])
+
+    # overwrite covth
+    if 'covth' in context:
+        covth = float(context['covth'])
+
+    # log enumerator params
+    logging.info("project: %s" % project)
+    logging.info("singleceneOnly: %s" % sso)
+    logging.info("auto_bbox: %s" % auto_bbox)
+    logging.info("preReferencePairDirection: %s" % pre_ref_pd)
+    logging.info("postReferencePairDirection: %s" % post_ref_pd)
+    logging.info("temporalBaseline: %s" % temporalBaseline)
+    logging.info("minMatch: %s" % minMatch)
+    logging.info("covth: %s" % covth)
+
+    # get bbox from query
+    coords = None
+    bbox = [-90., 90., -180., 180.]
+    if 'and' in query.get('query', {}).get('filtered', {}).get('filter', {}):
+        filts = query['query']['filtered']['filter']['and']
+    elif 'geo_shape' in query.get('query', {}).get('filtered', {}).get('filter', {}):
+        filts = [ { "geo_shape": query['query']['filtered']['filter']['geo_shape'] } ]
+    else: filts = []
+    for filt in filts:
+        if 'geo_shape' in filt:
+            coords = filt['geo_shape']['location']['shape']['coordinates']
+            roi = {
+                'type': 'Polygon',
+                'coordinates': coords,
+            }
+            logger.info("query filter ROI: %s" % json.dumps(roi))
+            roi_geom = ogr.CreateGeometryFromJson(json.dumps(roi))
+            roi_x_min, roi_x_max, roi_y_min, roi_y_max = roi_geom.GetEnvelope()
+            bbox = [ roi_y_min, roi_y_max, roi_x_min, roi_x_max ]
+            logger.info("query filter bbox: %s" % bbox)
+            break
+
+    # query docs
+    uu = UU()
+    logger.info("rest_url: {}".format(uu.rest_url))
+    logger.info("dav_url: {}".format(uu.dav_url))
+    logger.info("version: {}".format(uu.version))
+    logger.info("grq_index_prefix: {}".format(uu.grq_index_prefix))
+
+    # get normalized rest url
+    rest_url = uu.rest_url[:-1] if uu.rest_url.endswith('/') else uu.rest_url
+
+    # get index name and url
+    url = "{}/{}/_search?search_type=scan&scroll=60&size=100".format(rest_url, uu.grq_index_prefix)
+    logger.info("idx: {}".format(uu.grq_index_prefix))
+    logger.info("url: {}".format(url))
+
+    # query hits
+    query.update({
+        "partial_fields" : {
+            "partial" : {
+                "exclude" : "city",
+            }
+        }
+    })
+    #logger.info("query: {}".format(json.dumps(query, indent=2)))
+    r = requests.post(url, data=json.dumps(query))
+    r.raise_for_status()
+    scan_result = r.json()
+    count = scan_result['hits']['total']
+    scroll_id = scan_result['_scroll_id']
+    ref_hits = []
+    while True:
+        r = requests.post('%s/_search/scroll?scroll=60m' % rest_url, data=scroll_id)
+        res = r.json()
+        scroll_id = res['_scroll_id']
+        if len(res['hits']['hits']) == 0: break
+        ref_hits.extend(res['hits']['hits'])
+
+    # extract reference ids
+    ref_ids = { h['_id']: True for h in ref_hits }
+    logger.info("ref_ids: {}".format(json.dumps(ref_ids, indent=2)))
+    logger.info("ref_hits count: {}".format(len(ref_hits)))
+
+    # group ref hits by track and date
+    grouped_refs = group_frames_by_track_date(ref_hits)
+
+    # dedup any reprocessed reference SLCs
+    dedup_reprocessed_slcs(grouped_refs['grouped'], grouped_refs['metadata'])
+
+    #logger.info("ref hits: {}".format(json.dumps(grouped_refs['hits'], indent=2)))
+    #logger.info("ref sorted_hits: {}".format(pformat(grouped_refs['grouped'])))
+    #logger.info("ref slc_dates: {}".format(pformat(grouped_refs['dates'])))
+    #logger.info("ref slc_footprints: {}".format(json.dumps(grouped_refs['footprints'], indent=2)))
+
+    # build list reference scenes
+    ref_scenes = []
+    for track in grouped_refs['grouped']:
+        logger.info("track: %s" % track)
+        for ref_dt in grouped_refs['grouped'][track]:
+            logger.info("reference date: %s" % ref_dt.isoformat())
+            if sso:
+                for ref_id in grouped_refs['grouped'][track][ref_dt]:
+                    ref_scenes.append({ 'id': [ ref_id ],
+                                        'track': track,
+                                        'date': ref_dt,
+                                        'location': grouped_refs['footprints'][ref_id],
+                                        'pre_matches': None,
+                                        'post_matches': None })
+            else:
+                union_poly = get_union_geometry(grouped_refs['grouped'][track][ref_dt],
+                                                grouped_refs['footprints'])
+                if len(union_poly['coordinates']) > 1:
+                    logger.warn("Stitching %s will result in a disjoint geometry." % grouped_refs['grouped'][track][ref_dt])
+                    logger.warn("Skipping.")
+                else:
+                    ref_scenes.append({ 'id': grouped_refs['grouped'][track][ref_dt],
+                                        'track': track,
+                                        'date': ref_dt,
+                                        'location': union_poly,
+                                        'pre_matches': None,
+                                        'post_matches': None })
+
+    # find reference scene matches
+    for ref_scene in ref_scenes:
+        logger.info("#" * 80)
+        logger.info("ref id: %s" % ref_scene['id'])
+        logger.info("ref date: %s" % ref_scene['date'])
+        if pre_search:
+            logger.info("*" * 80)
+            pre_matches = group_frames_by_track_date(
+                              get_pair_hits(rest_url, ref_scene, 'pre',
+                                            temporal_baseline=temporalBaseline,
+                                            min_match=minMatch, covth=covth)
+                          )
+            dedup_reprocessed_slcs(pre_matches['grouped'], pre_matches['metadata'])
+            ref_scene['pre_matches'] = pre_matches
+        if post_search:
+            logger.info("*" * 80)
+            post_matches = group_frames_by_track_date(
+                               get_pair_hits(rest_url, ref_scene, 'post',
+                                             temporal_baseline=temporalBaseline,
+                                             min_match=minMatch, covth=covth)
+                           )
+            dedup_reprocessed_slcs(post_matches['grouped'], post_matches['metadata'])
+            ref_scene['post_matches'] = post_matches
+
+    #logger.info("ref_scenes: {}".format(pformat(ref_scenes)))
+    #logger.info("ref_scenes count: {}".format(len(ref_scenes)))
+
+    #submit jobs
+    projects = []
+    stitched_args = []
+    ifg_ids = []
+    master_zip_urls = []
+    master_orbit_urls = []
+    slave_zip_urls = []
+    slave_orbit_urls = []
+    swathnums = []
+    bboxes = []
+    auto_bboxes = []
+    orbit_dict = {}
+    for ref_scene in ref_scenes:
+        ref_ids = ref_scene['id']
+        track = ref_scene['track']
+        ref_dts = []
+        for i in ref_ids: ref_dts.extend(grouped_refs['dates'][i])
+        #logger.info("ref_ids: %s" % ref_ids)
+        #logger.info("ref_dts: %s" % ref_dts)
+            
+        # set orbit urls and cache for reference dates
+        ref_dt_orb = "%s_%s" % (ref_dts[0].isoformat(), ref_dts[-1].isoformat())
+        if ref_dt_orb not in orbit_dict:
+            match = SLC_RE.search(ref_ids[0])
+            if not match:
+                raise RuntimeError("Failed to recognize SLC ID %s." % ref_ids[0])
+            mission = match.group('mission')
+            orbit_dict[ref_dt_orb] = fetch("%s.0" % ref_dts[0].isoformat(),
+                                           "%s.0" % ref_dts[-1].isoformat(),
+                                           mission=mission, dry_run=True)
+            if orbit_dict[ref_dt_orb] is None:
+                raise RuntimeError("Failed to query for an orbit URL for track {} {} {}.".format(track,
+                                   ref_dts[0], ref_dts[-1]))
+
+        # generate jobs for pre-reference pairs
+        if ref_scene['pre_matches'] is not None:
+            if track in ref_scene['pre_matches']['grouped']:
+                matched_days = ref_scene['pre_matches']['grouped'][track]
+                for matched_day, matched_ids in matched_days.iteritems():
+                    matched_dts = []
+                    for i in matched_ids: matched_dts.extend(ref_scene['pre_matches']['dates'][i])
+                    #logger.info("pre_matches matched_ids: %s" % matched_ids)
+                    #logger.info("pre_matches matched_dts: %s" % matched_dts)
+                    all_dts = list(chain(ref_dts, matched_dts))
+                    all_dts.sort()
+
+                    # set orbit urls and cache for matched dates
+                    matched_dt_orb = "%s_%s" % (matched_dts[0].isoformat(), matched_dts[-1].isoformat())
+                    if matched_dt_orb not in orbit_dict:
+                        match = SLC_RE.search(matched_ids[0])
+                        if not match:
+                            raise RuntimeError("Failed to recognize SLC ID %s." % matched_ids[0])
+                        mission = match.group('mission')
+                        orbit_dict[matched_dt_orb] = fetch("%s.0" % matched_dts[0].isoformat(),
+                                                           "%s.0" % matched_dts[-1].isoformat(),
+                                                           mission=mission, dry_run=True)
+                        if orbit_dict[matched_dt_orb] is None:
+                            raise RuntimeError("Failed to query for an orbit URL for track {} {} {}.".format(track,
+                                               matched_dts[0], matched_dts[-1]))
+
+                    # get orbit type
+                    orbit_type = 'poeorb'
+                    for o in [orbit_dict[ref_dt_orb], orbit_dict[matched_dt_orb]]:
+                        if RESORB_RE.search(o):
+                            orbit_type = 'resorb'
+                            break
+
+                    # filter if we expect only precise orbits
+                    if precise_orbit_only and orbit_type == 'resorb':
+                        logger.info("Precise orbit required. Filtering job configured with restituted orbit.")
+                    else:
+                        # create jobs for backwards pair
+                        if pre_ref_pd in ('backward', 'both'):
+                            ifg_master_dt = all_dts[-1]
+                            ifg_slave_dt = all_dts[0]
+                            for swathnum in [1, 2, 3]:
+                                stitched_args.append(False if len(ref_ids) == 1 or len(matched_ids) == 1 else True)
+                                master_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
+                                master_orbit_urls.append(orbit_dict[ref_dt_orb])
+                                slave_zip_urls.append([ref_scene['pre_matches']['hits'][i] for i in matched_ids])
+                                slave_orbit_urls.append(orbit_dict[matched_dt_orb])
+                                swathnums.append(swathnum)
+                                bboxes.append(bbox)
+                                auto_bboxes.append(auto_bbox)
+                                projects.append(project)
+                                ifg_hash = hashlib.md5(json.dumps([
+                                    id_tmpl,
+                                    stitched_args[-1],
+                                    master_zip_urls[-1],
+                                    master_orbit_urls[-1],
+                                    slave_zip_urls[-1],
+                                    slave_orbit_urls[-1],
+                                    swathnums[-1],
+                                    #bboxes[-1],
+                                    #auto_bboxes[-1],
+                                    projects[-1],
+                                    context['azimuth_looks'],
+                                    context['range_looks'],
+                                    context['filter_strength'],
+                                    context.get('dem_type', 'SRTM+v3'),
+                                ])).hexdigest()
+                                ifg_ids.append(id_tmpl.format('M', len(ref_ids), len(matched_ids),
+                                                              track, ifg_master_dt,
+                                                              ifg_slave_dt, swathnum,
+                                                              orbit_type, ifg_hash[0:4]))
+                            
+                        # create jobs for forward pair
+                        if pre_ref_pd in ('forward', 'both'):
+                            ifg_master_dt = all_dts[0]
+                            ifg_slave_dt = all_dts[-1]
+                            for swathnum in [1, 2, 3]:
+                                stitched_args.append(False if len(ref_ids) == 1 or len(matched_ids) == 1 else True)
+                                master_zip_urls.append([ref_scene['pre_matches']['hits'][i] for i in matched_ids])
+                                master_orbit_urls.append(orbit_dict[matched_dt_orb])
+                                slave_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
+                                slave_orbit_urls.append(orbit_dict[ref_dt_orb])
+                                swathnums.append(swathnum)
+                                bboxes.append(bbox)
+                                auto_bboxes.append(auto_bbox)
+                                projects.append(project)
+                                ifg_hash = hashlib.md5(json.dumps([
+                                    id_tmpl,
+                                    stitched_args[-1],
+                                    master_zip_urls[-1],
+                                    master_orbit_urls[-1],
+                                    slave_zip_urls[-1],
+                                    slave_orbit_urls[-1],
+                                    swathnums[-1],
+                                    #bboxes[-1],
+                                    #auto_bboxes[-1],
+                                    projects[-1],
+                                    context['azimuth_looks'],
+                                    context['range_looks'],
+                                    context['filter_strength'],
+                                    context.get('dem_type', 'SRTM+v3'),
+                                ])).hexdigest()
+                                ifg_ids.append(id_tmpl.format('S', len(matched_ids), len(ref_ids),
+                                                              track, ifg_master_dt,
+                                                              ifg_slave_dt, swathnum,
+                                                              orbit_type, ifg_hash[0:4]))
+                    
+        # generate jobs for post-reference pairs
+        if ref_scene['post_matches'] is not None:
+            if track in ref_scene['post_matches']['grouped']:
+                matched_days = ref_scene['post_matches']['grouped'][track]
+                for matched_day, matched_ids in matched_days.iteritems():
+                    matched_dts = []
+                    for i in matched_ids: matched_dts.extend(ref_scene['post_matches']['dates'][i])
+                    #logger.info("post_matches matched_ids: %s" % matched_ids)
+                    #logger.info("post_matches matched_dts: %s" % matched_dts)
+                    all_dts = list(chain(ref_dts, matched_dts))
+                    all_dts.sort()
+                    
+                    # set orbit urls and cache for matched dates
+                    matched_dt_orb = "%s_%s" % (matched_dts[0].isoformat(), matched_dts[-1].isoformat())
+                    if matched_dt_orb not in orbit_dict:
+                        match = SLC_RE.search(matched_ids[0])
+                        if not match:
+                            raise RuntimeError("Failed to recognize SLC ID %s." % matched_ids[0])
+                        mission = match.group('mission')
+                        orbit_dict[matched_dt_orb] = fetch("%s.0" % matched_dts[0].isoformat(),
+                                                           "%s.0" % matched_dts[-1].isoformat(),
+                                                           mission=mission, dry_run=True)
+                        if orbit_dict[matched_dt_orb] is None:
+                            raise RuntimeError("Failed to query for an orbit URL for track {} {} {}.".format(track,
+                                               matched_dts[0], matched_dts[-1]))
+
+                    # get orbit type
+                    orbit_type = 'poeorb'
+                    for o in [orbit_dict[ref_dt_orb], orbit_dict[matched_dt_orb]]:
+                        if RESORB_RE.search(o):
+                            orbit_type = 'resorb'
+                            break
+
+                    # filter if we expect only precise orbits
+                    if precise_orbit_only and orbit_type == 'resorb':
+                        logger.info("Precise orbit required. Filtering job configured with restituted orbit.")
+                    else:
+                        # create jobs for backwards pair
+                        if post_ref_pd in ('backward', 'both'):
+                            ifg_master_dt = all_dts[-1]
+                            ifg_slave_dt = all_dts[0]
+                            for swathnum in [1, 2, 3]:
+                                stitched_args.append(False if len(ref_ids) == 1 or len(matched_ids) == 1 else True)
+                                master_zip_urls.append([ref_scene['post_matches']['hits'][i] for i in matched_ids])
+                                master_orbit_urls.append(orbit_dict[matched_dt_orb])
+                                slave_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
+                                slave_orbit_urls.append(orbit_dict[ref_dt_orb])
+                                swathnums.append(swathnum)
+                                bboxes.append(bbox)
+                                auto_bboxes.append(auto_bbox)
+                                projects.append(project)
+                                ifg_hash = hashlib.md5(json.dumps([
+                                    id_tmpl,
+                                    stitched_args[-1],
+                                    master_zip_urls[-1],
+                                    master_orbit_urls[-1],
+                                    slave_zip_urls[-1],
+                                    slave_orbit_urls[-1],
+                                    swathnums[-1],
+                                    #bboxes[-1],
+                                    #auto_bboxes[-1],
+                                    projects[-1],
+                                    context['azimuth_looks'],
+                                    context['range_looks'],
+                                    context['filter_strength'],
+                                    context.get('dem_type', 'SRTM+v3'),
+                                ])).hexdigest()
+                                ifg_ids.append(id_tmpl.format('S', len(matched_ids), len(ref_ids),
+                                                              track, ifg_master_dt,
+                                                              ifg_slave_dt, swathnum,
+                                                              orbit_type, ifg_hash[0:4]))
+                            
+                        # create jobs for forward pair
+                        if post_ref_pd in ('forward', 'both'):
+                            ifg_master_dt = all_dts[0]
+                            ifg_slave_dt = all_dts[-1]
+                            for swathnum in [1, 2, 3]:
+                                stitched_args.append(False if len(ref_ids) == 1 or len(matched_ids) == 1 else True)
+                                master_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
+                                master_orbit_urls.append(orbit_dict[ref_dt_orb])
+                                slave_zip_urls.append([ref_scene['post_matches']['hits'][i] for i in matched_ids])
+                                slave_orbit_urls.append(orbit_dict[matched_dt_orb])
+                                swathnums.append(swathnum)
+                                bboxes.append(bbox)
+                                auto_bboxes.append(auto_bbox)
+                                projects.append(project)
+                                ifg_hash = hashlib.md5(json.dumps([
+                                    id_tmpl,
+                                    stitched_args[-1],
+                                    master_zip_urls[-1],
+                                    master_orbit_urls[-1],
+                                    slave_zip_urls[-1],
+                                    slave_orbit_urls[-1],
+                                    swathnums[-1],
+                                    #bboxes[-1],
+                                    #auto_bboxes[-1],
+                                    projects[-1],
+                                    context['azimuth_looks'],
+                                    context['range_looks'],
+                                    context['filter_strength'],
+                                    context.get('dem_type', 'SRTM+v3'),
+                                ])).hexdigest()
+                                ifg_ids.append(id_tmpl.format('M', len(ref_ids), len(matched_ids),
+                                                              track, ifg_master_dt,
+                                                              ifg_slave_dt, swathnum,
+                                                              orbit_type, ifg_hash[0:4]))
+                    
+    return ( projects, stitched_args, auto_bboxes, ifg_ids, master_zip_urls,
+             master_orbit_urls, slave_zip_urls, slave_orbit_urls, swathnums,
+             bboxes )
+
 def get_topsapp_cfgs(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
     """Return all possible topsApp configurations."""
     # get context
