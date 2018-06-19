@@ -10,7 +10,7 @@
       <context_file>_context.json</context_file>
     </sf:inputs>
     <sf:outputs>
-      <interferograms from="@#create_ifg"/>
+      <interferograms from="@#create_standard_process"/>
     </sf:outputs>
 
     <sf:processes>
@@ -34,12 +34,12 @@
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-            <sf:binding>python:?enumerate_topsapp_cfgs.get_topsapp_cfgs</sf:binding>
+            <sf:binding>python:?enumerate_topsapp_cfgs.get_topsapp_cfgs_standard_process</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>
       
-      <sf:process id="create_ifg">
+      <sf:process id="create_standard_process">
         <sf:inputs>
           <projects from="@#previous"/>
           <stitched from="@#previous"/>
@@ -58,7 +58,7 @@
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-            <sf:binding job_queue="jobs_processed" async="true">map:python:?parpython.create_ifg_job</sf:binding>
+            <sf:binding job_queue="jobs_processed" async="true">map:python:?parpython.create_standard_process_job</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>
