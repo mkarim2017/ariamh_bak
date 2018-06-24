@@ -26,7 +26,7 @@ class UrlUtils(object):
         self._dav_url = None
         self._dav_u = None
         self._dav_p = None
-        self._srtm1_dem_url = None
+        self._dem_url = None
         self._srtm3_dem_url = None
         self._ned1_dem_url = None
         self._ned13_dem_url = None
@@ -57,8 +57,8 @@ class UrlUtils(object):
     def dav_p(self):
         return self._dav_p
     @property 
-    def srtm1_dem_url(self):
-        return self._srtm1_dem_url
+    def dem_url(self):
+        return self._dem_url
     @property
     def srtm3_dem_url(self):
         return self._srtm3_dem_url
@@ -122,7 +122,7 @@ class UrlUtils(object):
         except:
             pass
         try:
-            self._srtm1_dem_url = dc['ARIA_SRTM1_DEM_URL'].strip()
+            self._dem_url = dc['ARIA_DEM_URL'].strip()
         except:
             pass
         try:
@@ -176,4 +176,3 @@ def main():
     print(uu.rest_url,uu.dav_url,uu.dav_u,uu.dav_p,uu.version)
 if __name__ == '__main__':
     sys.exit(main())
-
