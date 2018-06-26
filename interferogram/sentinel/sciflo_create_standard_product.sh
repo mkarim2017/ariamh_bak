@@ -19,7 +19,7 @@ source $HOME/verdi/bin/activate
 echo "##########################################" 1>&2
 echo -n "Running S1 create interferogram sciflo: " 1>&2
 date 1>&2
-/usr/bin/python $BASE_PATH/sciflo_create_standard_process.py > sciflo_create_standard_process.log 2>&1
+/usr/bin/python $BASE_PATH/sciflo_create_standard_product.py > sciflo_create_standard_product.log 2>&1
 STATUS=$?
 echo -n "Finished running S1 create interferogram sciflo: " 1>&2
 date 1>&2
