@@ -201,6 +201,7 @@ def get_union_geom(frame_infoes, bbox_type):
     return geom_union
 
 
+
 def create_stitched_met_json( frame_infoes, met_json_file):
     """Create HySDS met json file."""
 
@@ -327,10 +328,13 @@ def create_stitched_met_json( frame_infoes, met_json_file):
         else:
             print(met[param])
             met[param] = max(met[param])
-    
+   
+ 
     #met['imageCorners'] = get_image_corners(met['imageCorners'])
     try:
-        met['ogr_bbox'] =[[[x, y] for y, x in box] for box in bbox][0]
+        print(bbox)
+        print(type(bbox))
+        met['ogr_bbox'] =[[[x, y] for y, x in box] for box in bbox]
     except Exception as e:
         print(traceback.format_exc())
 	

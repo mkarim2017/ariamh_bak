@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ast, os, sys, json, re, math, logging, traceback, pickle, hashlib
 from lxml.etree import parse
 from osgeo import gdal, ogr, osr
