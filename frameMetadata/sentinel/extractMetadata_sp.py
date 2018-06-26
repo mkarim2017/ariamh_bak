@@ -201,15 +201,38 @@ def get_union_geom(frame_infoes, bbox_type):
     return geom_union
 
 
+def get_env_box(env):
+    bbox = [
+        [ env[3], env[0] ],
+        [ env[3], env[1] ],
+        [ env[2], env[1] ],
+        [ env[2], env[0] ],
+    ]
+    return bbox
 
 def create_stitched_met_json( frame_infoes, met_json_file):
     """Create HySDS met json file."""
 
     # build met
-    bbox = json.loads(get_union_geom(frame_infoes, "bbox").ExportToJson())["coordinates"][0]
+
+    geom_union = get_union_geom(frame_infoes, "bbox")
+    print(geom_union)
+    bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : bbox : %s" %bbox)
-    refbbox = json.loads(get_union_geom(frame_infoes, "refbbox").ExportToJson())["coordinates"][0]
+    bbox = get_env_box(geom_union.GetEnvelope())
+    print("create_stitched_met_json :Final bbox : %s" %bbox)
+
+    geom_union = get_union_geom(frame_infoes, "refbbox")
+    print(geom_union)
+    bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : refbbox : %s" %refbbox)
+    bbox = get_env_box(geom_union.GetEnvelope())
+    print("create_stitched_met_json :Final refbbox : %s" %refbbox)
+
+
+
+    #refbbox = json.loads(get_union_geom(frame_infoes, "refbbox").ExportToJson())["coordinates"][0]
+    #print("create_stitched_met_json : refbbox : %s" %refbbox)
     met = {
         'product_type': 'interferogram',
         #'master_scenes': [],
