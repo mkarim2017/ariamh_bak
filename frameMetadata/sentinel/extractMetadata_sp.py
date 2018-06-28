@@ -164,16 +164,18 @@ def get_loc(frameInfo, bbox_type):
     """Return GeoJSON bbox."""
 
     bbox = np.array(frameInfo.getBBox()).astype(np.float)
-    print("get_loc : %s" %bbox)
+    print("get_loc bbox: %s" %bbox)
     if bbox_type == "refbbox":
         bbox = np.array(frameInfo.getReferenceBBox()).astype(np.float)
     coords = [
         [ bbox[0,1], bbox[0,0] ],
         [ bbox[1,1], bbox[1,0] ],
-        [ bbox[3,1], bbox[3,0] ],
         [ bbox[2,1], bbox[2,0] ],
+        [ bbox[3,1], bbox[3,0] ],
         [ bbox[0,1], bbox[0,0] ],
     ]
+
+    print("get_loc coords : [%s]" %coords)
     return {
         "type": "Polygon",
         "coordinates":  [coords] 
@@ -191,23 +193,30 @@ def get_union_geom(frame_infoes, bbox_type):
     geom_union = None
     for frameInfo in frame_infoes:
         loc = get_loc(frameInfo, bbox_type)
+
+        print("get_union_geom loc : %s" %loc)
         geom = ogr.CreateGeometryFromJson(json.dumps(loc))
         print("get_union_geom : geom : %s" %get_union_geom)
         if geom_union is None:
             geom_union = geom
         else:
             geom_union = geom_union.Union(geom)
+        print("union geom : %s " %geom_union)
+    print("final geom_union : %s" %geom_union)
     print("extract data geom_union type : %s" %type(geom_union))
     return geom_union
 
 
 def get_env_box(env):
+
+    print("get_env_box env " %env)
     bbox = [
         [ env[3], env[0] ],
         [ env[3], env[1] ],
         [ env[2], env[1] ],
         [ env[2], env[0] ],
     ]
+    print("get_env_box box : %s" %bbox)
     return bbox
 
 def create_stitched_met_json( frame_infoes, met_json_file):
@@ -216,17 +225,17 @@ def create_stitched_met_json( frame_infoes, met_json_file):
     # build met
 
     geom_union = get_union_geom(frame_infoes, "bbox")
-    print(geom_union)
+    print("create_stitched_met_json : bbox geom_union : %s" %geom_union)
     bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : bbox : %s" %bbox)
     bbox = get_env_box(geom_union.GetEnvelope())
     print("create_stitched_met_json :Final bbox : %s" %bbox)
 
     geom_union = get_union_geom(frame_infoes, "refbbox")
-    print(geom_union)
-    bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
+    print("create_stitched_met_json : refbbox geom_union : %s" %geom_union)
+    refbbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : refbbox : %s" %refbbox)
-    bbox = get_env_box(geom_union.GetEnvelope())
+    refbbox = get_env_box(geom_union.GetEnvelope())
     print("create_stitched_met_json :Final refbbox : %s" %refbbox)
 
 

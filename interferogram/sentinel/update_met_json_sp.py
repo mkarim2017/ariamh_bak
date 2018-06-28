@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import ast, os, sys, json, re, math, logging, traceback, pickle, hashlib
 from lxml.etree import parse
@@ -101,8 +102,8 @@ def get_loc(box):
     coords = [
         [ bbox[0,1], bbox[0,0] ],
         [ bbox[1,1], bbox[1,0] ],
-        [ bbox[3,1], bbox[3,0] ],
         [ bbox[2,1], bbox[2,0] ],
+        [ bbox[3,1], bbox[3,0] ],
         [ bbox[0,1], bbox[0,0] ],
     ]
     return {
