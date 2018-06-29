@@ -209,7 +209,7 @@ def get_union_geom(frame_infoes, bbox_type):
 
 def get_env_box(env):
 
-    print("get_env_box env " %env)
+    print("get_env_box env :%s" %env)
     bbox = [
         [ env[3], env[0] ],
         [ env[3], env[1] ],

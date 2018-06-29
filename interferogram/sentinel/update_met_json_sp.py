@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 import ast, os, sys, json, re, math, logging, traceback, pickle, hashlib
 from lxml.etree import parse
@@ -111,6 +110,18 @@ def get_loc(box):
         "coordinates":  [coords] 
     }
 
+def get_env_box(env):
+
+    print("get_env_box env " %env)
+    bbox = [
+        [ env[3], env[0] ],
+        [ env[3], env[1] ],
+        [ env[2], env[1] ],
+        [ env[2], env[0] ],
+    ]
+    print("get_env_box box : %s" %bbox)
+    return bbox
+
 
 def get_union_geom(bbox_list):
     geom_union = None
@@ -190,7 +201,12 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
             bbox_swath = get_raster_corner_coords(vrt_file)
         print("bbox_swath : %s" %bbox_swath)
         bboxes.append(bbox_swath)
-    bbox = json.loads(get_union_geom(bboxes).ExportToJson())["coordinates"][0]
+
+    geom_union = get_union_geom(bboxes)
+    bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
+    print("First Union Bbox : %s " %bbox)
+    bbox = get_env_box(geom_union.GetEnvelope())
+    print("Get Envelop :Final bbox : %s" %bbox)    
 
     #extract bperp and bpar
     cb_pkl = os.path.join(pickle_dir, "computeBaselines")
