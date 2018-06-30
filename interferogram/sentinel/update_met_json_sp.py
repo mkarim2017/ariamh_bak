@@ -112,7 +112,7 @@ def get_loc(box):
 
 def get_env_box(env):
 
-    print("get_env_box env " %env)
+    #print("get_env_box env " %env)
     bbox = [
         [ env[3], env[0] ],
         [ env[3], env[1] ],
