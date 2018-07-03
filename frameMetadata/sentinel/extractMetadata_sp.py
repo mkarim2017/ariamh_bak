@@ -304,7 +304,7 @@ def create_stitched_met_json( frame_infoes, met_json_file):
 		#'master_scenes', 'temporal_span', 'swath'
                )
 
-    single_params = ('frameID', 'sensor', 'beamID', 'frameNumber',
+    single_params = ('frameID', 'sensor', 'beamID', 'frameNumber', 'trackNumber',
                       'dataset_type', 'reference', 'archive_filename',
                      'direction', 'orbitRepeat', 'lookDirection','frameName', 'product_type'
                     #,'esd_threshold'
