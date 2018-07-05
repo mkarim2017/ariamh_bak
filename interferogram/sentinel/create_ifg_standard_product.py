@@ -879,7 +879,7 @@ def main():
     extract_cmd_path = os.path.abspath(os.path.join(BASE_PATH, '..', 
                                                     '..', 'frameMetadata',
                                                     'sentinel'))
-    extract_cmd_tmpl = "{}/extractMetadata_sp.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
+    extract_cmd_tmpl = "{}/extractMetadata_standard_product.sh -i {}/annotation/s1?-iw?-slc-{}-*.xml -o {}"
     check_call(extract_cmd_tmpl.format(extract_cmd_path, master_safe_dirs[0],
                                        master_pol, met_file),shell=True)
     
