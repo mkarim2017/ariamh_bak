@@ -498,7 +498,7 @@ def get_pair_direction(ctx, param):
     else: raise RuntimeError("Invalid pair direction %s." % pd)
 
 
-def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
+def get_topsapp_cfgs_standard_process(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
     """Return all possible topsApp configurations."""
     # get context
     with open(context_file) as f:

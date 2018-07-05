@@ -223,7 +223,6 @@ def main():
     logger.info("GRQ url: {}".format(es_url))
     logger.info("GRQ index: {}".format(es_index))
     logger.info("Product ID for version {}: {}".format(version, id))
-    '''
     if ifg_exists(es_url, es_index, id):
         logger.info("{} interferogram for {}".format(version, id_base) +
                     " was previously generated and exists in GRQ database.")
@@ -234,23 +233,22 @@ def main():
             try: shutil.rmtree(i)
             except: pass
         return 0
-    '''
+
     # get DEM configuration
     dem_type = ctx.get("context", {}).get("dem_type", "SRTM+v3")
-    srtm1_dem_url = uu.srtm1_dem_url
-    srtm3_dem_url = uu.srtm3_dem_url
+    srtm_dem_url = uu.dem_url
     ned1_dem_url = uu.ned1_dem_url
     ned13_dem_url = uu.ned13_dem_url
     dem_user = uu.dem_u
     dem_pass = uu.dem_p
-
-    # download project specific preprocess DEM
+     
+    # download project specific DEM
     if 'kilauea' in ctx['project']:
         s = requests.session()
         s.auth = (dem_user, dem_pass)
         download_file(KILAUEA_DEM_XML, session=s)
         download_file(KILAUEA_DEM, session=s)
-        preprocess_dem_file = os.path.basename(KILAUEA_DEM)
+        dem_file = os.path.basename(KILAUEA_DEM)
     else:
         # get DEM bbox
         dem_S, dem_N, dem_W, dem_E = bbox
@@ -258,73 +256,44 @@ def main():
         dem_N = int(math.ceil(dem_N))
         dem_W = int(math.floor(dem_W))
         dem_E = int(math.ceil(dem_E))
-        preprocess_dem_url = None
-        if dem_type.startswith("SRTM"):
-            if dem_type == "SRTM+v3":
-                preprocess_dem_url = srtm1_dem_url
-            elif dem_type.startswith("SRTM3"):
-                preprocess_dem_url = srtm3_dem_url
-            else:
-                raise RuntimeError("Unknown SRTM dem type %s." % dem_type)
+        if dem_type == "SRTM+v3":
+            dem_url = srtm_dem_url
             dem_cmd = [
                 "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
                 "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
                 "-r", "-s", "1", "-f", "-x", "-c", "-n", dem_user, "-w", dem_pass,
-                "-u", preprocess_dem_url
+                "-u", dem_url
             ]
             dem_cmd_line = " ".join(dem_cmd)
             logger.info("Calling dem.py: {}".format(dem_cmd_line))
             check_call(dem_cmd_line, shell=True)
-            preprocess_dem_file = glob("*.dem.wgs84")[0]
+            dem_file = glob("*.dem.wgs84")[0]
         else:
-            if dem_type == "NED1": preprocess_dem_url = ned1_dem_url
-            elif dem_type.startswith("NED13"): preprocess_dem_url = ned13_dem_url
+            if dem_type == "NED1": dem_url = ned1_dem_url
+            elif dem_type.startswith("NED13"): dem_url = ned13_dem_url
             else: raise RuntimeError("Unknown dem type %s." % dem_type)
             if dem_type == "NED13-downsampled": downsample_option = "-d 33%"
             else: downsample_option = ""
             dem_cmd = [
                 "{}/ned_dem.py".format(BASE_PATH), "-a",
                 "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
-                downsample_option, "-u", dem_user, "-p", dem_pass, preprocess_dem_url
+                downsample_option, "-u", dem_user, "-p", dem_pass, dem_url
             ]
             dem_cmd_line = " ".join(dem_cmd)
             logger.info("Calling ned_dem.py: {}".format(dem_cmd_line))
             check_call(dem_cmd_line, shell=True)
-            preprocess_dem_file = "stitched.dem"
-    logger.info("Using Preprocess DEM file: {}".format(preprocess_dem_file))
+            dem_file = "stitched.dem"
+    logger.info("Using DEM file: {}".format(dem_file))
 
-
-    # fix file path in Preprocess DEM xml
+    # fix file path in DEM xml
     fix_cmd = [
         "{}/applications/fixImageXml.py".format(os.environ['ISCE_HOME']),
-        "-i", preprocess_dem_file, "--full"
+        "-i", dem_file, "--full"
     ]
     fix_cmd_line = " ".join(fix_cmd)
     logger.info("Calling fixImageXml.py: {}".format(fix_cmd_line))
     check_call(fix_cmd_line, shell=True)
-    
-    geocode_dem_url = srtm3_dem_url
-    dem_cmd = [
-        "{}/applications/dem.py".format(os.environ['ISCE_HOME']), "-a",
-        "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),
-        "-r", "-s", "1", "-f", "-x", "-c", "-n", dem_user, "-w", dem_pass,
-        "-u", geocode_dem_url
-    ]
-    dem_cmd_line = " ".join(dem_cmd)
-    logger.info("Calling dem.py: {}".format(dem_cmd_line))
-    check_call(dem_cmd_line, shell=True)
-    geocode_dem_file = glob("*.dem.wgs84")[0]
-    logger.info("Using Geocode DEM file: {}".format(geocode_dem_file))
-
-    # fix file path in Geocoding DEM xml
-    fix_cmd = [
-        "{}/applications/fixImageXml.py".format(os.environ['ISCE_HOME']),
-        "-i", geocode_dem_file, "--full"
-    ]
-    fix_cmd_line = " ".join(fix_cmd)
-    logger.info("Calling fixImageXml.py: {}".format(fix_cmd_line))
-    check_call(fix_cmd_line, shell=True)
-    
+        
     # download auciliary calibration files
     aux_cmd = [
         #"{}/fetchCal.py".format(BASE_PATH), "-o", "aux_cal"
@@ -342,7 +311,7 @@ def main():
     create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
                      str(master_safe_dirs), str(slave_safe_dirs), 
                      ctx['master_orbit_file'], ctx['slave_orbit_file'],
-                     master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
+                     master_pol, slave_pol, dem_file,
                      "1, 2, 3" if ctx['stitch_subswaths_xt'] else ctx['swathnum'],
                      ctx['azimuth_looks'], ctx['range_looks'], ctx['filter_strength'],
                      "{} {} {} {}".format(*bbox), "True", do_esd,
@@ -377,7 +346,7 @@ def main():
                 create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
                                  str(master_safe_dirs), str(slave_safe_dirs), 
                                  ctx['master_orbit_file'], ctx['slave_orbit_file'],
-                                 master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
+                                 master_pol, slave_pol, dem_file,
                                  "1, 2, 3" if ctx['stitch_subswaths_xt'] else ctx['swathnum'],
                                  ctx['azimuth_looks'], ctx['range_looks'], ctx['filter_strength'],
                                  "{} {} {} {}".format(*bbox), "True", do_esd,
@@ -388,7 +357,7 @@ def main():
             create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
                              str(master_safe_dirs), str(slave_safe_dirs), 
                              ctx['master_orbit_file'], ctx['slave_orbit_file'],
-                             master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
+                             master_pol, slave_pol, dem_file,
                              "1, 2, 3" if ctx['stitch_subswaths_xt'] else ctx['swathnum'],
                              ctx['azimuth_looks'], ctx['range_looks'], ctx['filter_strength'],
                              "{} {} {} {}".format(*bbox), "True", do_esd,
@@ -660,7 +629,7 @@ def main():
 
     # write PROV-ES JSON
     #${BASE_PATH}/create_prov_es-create_interferogram.sh $id $project $master_orbit_file $slave_orbit_file \
-    #                                                        ${preprocess_dem_file}.xml $preprocess_dem_file $WORK_DIR \
+    #                                                        ${dem_file}.xml $dem_file $WORK_DIR \
     #                                                        ${id}/${id}.prov_es.json > create_prov_es.log 2>&1
     
     # clean out SAFE directories and DEM files
