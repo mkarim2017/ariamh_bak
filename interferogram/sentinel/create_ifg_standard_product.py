@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from osgeo import ogr
 
-from utils.UrlUtils import UrlUtils
+from utils.UrlUtils_standard_product import UrlUtils
 from check_interferogram import check_int
 from create_input_xml_standard_product import create_input_xml
 
