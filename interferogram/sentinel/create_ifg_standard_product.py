@@ -11,7 +11,7 @@ from osgeo import ogr
 
 from utils.UrlUtils import UrlUtils
 from check_interferogram import check_int
-from create_input_xml import create_input_xml
+from create_input_xml_standard_product import create_input_xml
 
 
 log_format = "[%(asctime)s: %(levelname)s/%(funcName)s] %(message)s"
@@ -581,7 +581,7 @@ def main():
     do_esd = True
     esd_coh_th = 0.85
     xml_file = "topsApp.xml"
-    create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
+    create_input_xml(os.path.join(BASE_PATH, 'topsApp_standard_product.xml.tmpl'), xml_file,
                      str(master_safe_dirs), str(slave_safe_dirs), 
                      ctx['master_orbit_file'], ctx['slave_orbit_file'],
                      master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
@@ -620,7 +620,7 @@ def main():
             if esd_coh_th < esd_coh_min:
                 logger.info("Disabling ESD filtering.")
                 do_esd = False
-                create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
+                create_input_xml(os.path.join(BASE_PATH, 'topsApp_standard_product.xml.tmpl'), xml_file,
                                  str(master_safe_dirs), str(slave_safe_dirs), 
                                  ctx['master_orbit_file'], ctx['slave_orbit_file'],
                                  master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
@@ -631,7 +631,7 @@ def main():
                 break
             logger.info("Stepping down ESD coherence threshold to: {}".format(esd_coh_th))
             logger.info("Creating topsApp.xml with ESD coherence threshold: {}".format(esd_coh_th))
-            create_input_xml(os.path.join(BASE_PATH, 'topsApp.xml.tmpl'), xml_file,
+            create_input_xml(os.path.join(BASE_PATH, 'topsApp_standard_product.xml.tmpl'), xml_file,
                              str(master_safe_dirs), str(slave_safe_dirs), 
                              ctx['master_orbit_file'], ctx['slave_orbit_file'],
                              master_pol, slave_pol, preprocess_dem_file, geocode_dem_file,
@@ -892,7 +892,7 @@ def main():
     slave_mission = MISSION_RE.search(slave_safe_dirs[0]).group(1)
     unw_vrt = "filt_topophase.unw.geo.vrt"
     #fine_int_xml = "fine_interferogram.xml"
-    update_met_cmd = '{}/update_met_json_sp.py {} {} "{}" {} {} {}/{} "{}" {}/{} {}/{} {}'
+    update_met_cmd = '{}/update_met_json_standard_product.py {} {} "{}" {} {} {}/{} "{}" {}/{} {}/{} {}'
     check_call(update_met_cmd.format(BASE_PATH, orbit_type, scene_count,
                                      ctx['swathnum'], master_mission,
                                      slave_mission, prod_dir, 'PICKLE',

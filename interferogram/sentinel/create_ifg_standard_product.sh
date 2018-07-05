@@ -19,7 +19,7 @@ source $HOME/verdi/bin/activate
 echo "##########################################" 1>&2
 echo -n "Running S1 interferogram generation: " 1>&2
 date 1>&2
-python3 $BASE_PATH/create_ifg_sp_st.py > create_ifg_sp.log 2>&1
+python3 $BASE_PATH/create_ifg_standard_product.py > create_ifg_standard_product.log 2>&1
 STATUS=$?
 echo -n "Finished running S1 interferogram generation: " 1>&2
 date 1>&2
