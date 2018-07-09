@@ -498,7 +498,7 @@ def get_pair_direction(ctx, param):
     else: raise RuntimeError("Invalid pair direction %s." % pd)
 
 
-def get_topsapp_cfgs_standard_process(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
+def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
     """Return all possible topsApp configurations."""
     # get context
     with open(context_file) as f:
@@ -509,6 +509,10 @@ def get_topsapp_cfgs_standard_process(context_file, temporalBaseline=72, id_tmpl
     sso = get_bool_param(context, 'singlesceneOnly')
     auto_bbox = get_bool_param(context, 'auto_bbox')
     precise_orbit_only = get_bool_param(context, 'precise_orbit_only')
+    logging.info("project: %s" % project)
+    logging.info("singleceneOnly: %s" % sso)
+    logging.info("auto_bbox: %s" % auto_bbox)
+
     query = context['query']
 
     # pair direction:

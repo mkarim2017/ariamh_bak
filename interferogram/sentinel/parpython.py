@@ -71,7 +71,7 @@ def create_ifg_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_
     } 
 
 
-def create_standard_process_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
+def create_standard_product_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
                    slave_zip_url, slave_orbit_url, swathnum, bbox, wuid=None, job_num=None):
     """Map function for create interferogram job json creation."""
 
