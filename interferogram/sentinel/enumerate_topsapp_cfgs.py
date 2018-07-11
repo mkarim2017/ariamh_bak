@@ -954,9 +954,17 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                                               orbit_type, ifg_hash[0:4], "standard_product")
 
                 
-    return ( projects[0], dedup(stitched_args)[0], auto_bboxes[0], ifg_id, dedup(master_zip_urls)[0],
-             dedup(master_orbit_urls)[0], dedup(slave_zip_urls)[0], dedup(slave_orbit_urls)[0], swathnums,
+    return ( projects[0], dedup_urls(stitched_args)[0], auto_bboxes[0], ifg_id, dedup_urls(master_zip_urls)[0],
+             dedup_urls(master_orbit_urls)[0], dedup_urls(slave_zip_urls)[0], dedup_urls(slave_orbit_urls)[0], swathnums,
              bboxes )
+
+def dedup_urls(duplicate):
+    final_list = []
+    for num in duplicate:
+        if num not in final_list:
+            final_list.append(num)
+    return final_list
+
 
 def get_topsapp_cfgs(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
     """Return all possible topsApp configurations."""
