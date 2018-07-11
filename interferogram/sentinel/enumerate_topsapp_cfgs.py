@@ -683,10 +683,14 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
     master_orbit_urls = []
     slave_zip_urls = []
     slave_orbit_urls = []
-    swathnums = []
+    swathnums = [1, 2, 3]
     bboxes = []
     auto_bboxes = []
     orbit_dict = {}
+    bboxes.append(bbox)
+    auto_bboxes.append(auto_bbox)
+    projects.append(project)
+
     for ref_scene in ref_scenes:
         ref_ids = ref_scene['id']
         track = ref_scene['track']
@@ -756,10 +760,11 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                 master_orbit_urls.append(orbit_dict[ref_dt_orb])
                                 slave_zip_urls.append([ref_scene['pre_matches']['hits'][i] for i in matched_ids])
                                 slave_orbit_urls.append(orbit_dict[matched_dt_orb])
-                                swathnums.append(swathnum)
-                                bboxes.append(bbox)
-                                auto_bboxes.append(auto_bbox)
-                                projects.append(project)
+				'''
+                                #swathnums.append(swathnum)
+                                #bboxes.append(bbox)
+                                #auto_bboxes.append(auto_bbox)
+                                #projects.append(project)
                                 ifg_hash = hashlib.md5(json.dumps([
                                     id_tmpl,
                                     stitched_args[-1],
@@ -780,7 +785,7 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                                               track, ifg_master_dt,
                                                               ifg_slave_dt, swathnum,
                                                               orbit_type, ifg_hash[0:4]))
-                            
+                            	'''
                         # create jobs for forward pair
                         if pre_ref_pd in ('forward', 'both'):
                             ifg_master_dt = all_dts[0]
@@ -791,10 +796,11 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                 master_orbit_urls.append(orbit_dict[matched_dt_orb])
                                 slave_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
                                 slave_orbit_urls.append(orbit_dict[ref_dt_orb])
-                                swathnums.append(swathnum)
-                                bboxes.append(bbox)
-                                auto_bboxes.append(auto_bbox)
-                                projects.append(project)
+ 				'''
+                                #swathnums.append(swathnum)
+                                #bboxes.append(bbox)
+                                #auto_bboxes.append(auto_bbox)
+                                #projects.append(project)
                                 ifg_hash = hashlib.md5(json.dumps([
                                     id_tmpl,
                                     stitched_args[-1],
@@ -815,7 +821,7 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                                               track, ifg_master_dt,
                                                               ifg_slave_dt, swathnum,
                                                               orbit_type, ifg_hash[0:4]))
-                    
+                    		'''
         # generate jobs for post-reference pairs
         if ref_scene['post_matches'] is not None:
             if track in ref_scene['post_matches']['grouped']:
@@ -863,10 +869,11 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                 master_orbit_urls.append(orbit_dict[matched_dt_orb])
                                 slave_zip_urls.append([grouped_refs['hits'][i] for i in ref_ids])
                                 slave_orbit_urls.append(orbit_dict[ref_dt_orb])
-                                swathnums.append(swathnum)
-                                bboxes.append(bbox)
-                                auto_bboxes.append(auto_bbox)
-                                projects.append(project)
+				'''
+                                #swathnums.append(swathnum)
+                                #bboxes.append(bbox)
+                                #auto_bboxes.append(auto_bbox)
+                                #projects.append(project)
                                 ifg_hash = hashlib.md5(json.dumps([
                                     id_tmpl,
                                     stitched_args[-1],
@@ -887,7 +894,7 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                                               track, ifg_master_dt,
                                                               ifg_slave_dt, swathnum,
                                                               orbit_type, ifg_hash[0:4]))
-                            
+                        	'''
                         # create jobs for forward pair
                         if post_ref_pd in ('forward', 'both'):
                             ifg_master_dt = all_dts[0]
@@ -898,10 +905,11 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                 master_orbit_urls.append(orbit_dict[ref_dt_orb])
                                 slave_zip_urls.append([ref_scene['post_matches']['hits'][i] for i in matched_ids])
                                 slave_orbit_urls.append(orbit_dict[matched_dt_orb])
-                                swathnums.append(swathnum)
-                                bboxes.append(bbox)
-                                auto_bboxes.append(auto_bbox)
-                                projects.append(project)
+    				'''
+                                #swathnums.append(swathnum)
+                                #bboxes.append(bbox)
+                                #auto_bboxes.append(auto_bbox)
+                                #projects.append(project)
                                 ifg_hash = hashlib.md5(json.dumps([
                                     id_tmpl,
                                     stitched_args[-1],
@@ -922,9 +930,32 @@ def get_topsapp_cfgs_standard_product(context_file, temporalBaseline=72, id_tmpl
                                                               track, ifg_master_dt,
                                                               ifg_slave_dt, swathnum,
                                                               orbit_type, ifg_hash[0:4]))
-                    
-    return ( projects, stitched_args, auto_bboxes, ifg_ids, master_zip_urls,
-             master_orbit_urls, slave_zip_urls, slave_orbit_urls, swathnums,
+				'''
+    ifg_hash = hashlib.md5(json.dumps([
+                                    id_tmpl,
+                                    stitched_args[-1],
+                                    master_zip_urls[-1],
+                                    master_orbit_urls[-1],
+                                    slave_zip_urls[-1],
+                                    slave_orbit_urls[-1],
+                                    swathnums[-1],
+                                    #bboxes[-1],
+                                    #auto_bboxes[-1],
+                                    projects[-1],
+                                    context['azimuth_looks'],
+                                    context['range_looks'],
+                                    context['filter_strength'],
+                                    context.get('dem_type', 'SRTM+v3'),
+                                ])).hexdigest()
+
+    ifg_id = id_tmpl.format('M', len(ref_ids), len(matched_ids),
+                                                              track, ifg_master_dt,
+                                                              ifg_slave_dt, "123",
+                                                              orbit_type, ifg_hash[0:4], "standard_product")
+
+                
+    return ( projects[0], dedup(stitched_args)[0], auto_bboxes[0], ifg_id, dedup(master_zip_urls)[0],
+             dedup(master_orbit_urls)[0], dedup(slave_zip_urls)[0], dedup(slave_orbit_urls)[0], swathnums,
              bboxes )
 
 def get_topsapp_cfgs(context_file, temporalBaseline=72, id_tmpl=IFG_ID_TMPL, minMatch=0, covth=.95):
