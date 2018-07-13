@@ -42,6 +42,18 @@ def get_version():
     return ds_vers['S1-IFG']
 
 
+def get_area(coords):
+    '''get area of enclosed coordinates- determines clockwise or counterclockwise order'''
+    n = len(coords) # of corners
+    area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        area += coords[i][1] * coords[j][0]
+        area -= coords[j][1] * coords[i][0]
+    #area = abs(area) / 2.0
+    return area / 2
+
+
 def create_dataset_json(id, version, met_file, ds_file):
     """Write dataset json."""
 
@@ -49,8 +61,28 @@ def create_dataset_json(id, version, met_file, ds_file):
     # get metadata
     with open(met_file) as f:
         md = json.load(f)
-    
+
     print("create_dataset_json : met['bbox']: %s" %md['bbox'])
+    coordinates = [
+                    [
+                      [ md['bbox'][0][1], md['bbox'][0][0] ],
+                      [ md['bbox'][3][1], md['bbox'][3][0] ],
+                      [ md['bbox'][2][1], md['bbox'][2][0] ],
+                      [ md['bbox'][1][1], md['bbox'][1][0] ],
+                      [ md['bbox'][0][1], md['bbox'][0][0] ]
+                    ] 
+                  ]
+    cord_area = get_area(coordinates[0])
+    if not cord_area>0:
+        logger.info("creating dataset json. coordinates are not clockwise, reversing it")
+        coordinates = [coordinates[0][::-1]] 
+        logger.info(coordinates)
+        cord_area = get_area(coordinates[0])
+        if not cord_area>0:
+            logger.info("creating dataset json. coordinates are STILL NOT  clockwise")
+    else:
+        logger.info("creating dataset json. coordinates are already clockwise")
+            
     # build dataset
     ds = {
         'creation_timestamp': "%sZ" % datetime.utcnow().isoformat(),
@@ -58,15 +90,7 @@ def create_dataset_json(id, version, met_file, ds_file):
         'label': id,
         'location': {
             'type': 'Polygon',
-            'coordinates': [
-                [   
-                    [ md['bbox'][0][1], md['bbox'][0][0] ],
-                    [ md['bbox'][3][1], md['bbox'][3][0] ],
-                    [ md['bbox'][2][1], md['bbox'][2][0] ],
-                    [ md['bbox'][1][1], md['bbox'][1][0] ],
-                    [ md['bbox'][0][1], md['bbox'][0][0] ]
-                ]
-            ]
+            'coordinates': coordinates
         }
     }
 
@@ -487,6 +511,10 @@ def main():
             else: raise RuntimeError("Unknown dem type %s." % dem_type)
             if dem_type == "NED13-downsampled": downsample_option = "-d 33%"
             else: downsample_option = ""
+            dem_S = dem_S - 1 if dem_S > -89 else dem_S
+            dem_N = dem_N + 1 if dem_N < 89 else dem_N
+            dem_W = dem_W - 1 if dem_W > -179 else dem_W
+            dem_E = dem_E + 1 if dem_E < 179 else dem_E
             dem_cmd = [
                 "{}/ned_dem.py".format(BASE_PATH), "-a",
                 "stitch", "-b", "{} {} {} {}".format(dem_S, dem_N, dem_W, dem_E),

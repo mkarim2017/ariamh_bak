@@ -38,6 +38,24 @@ def objectify(inxml):
         root = OBJ.parse(fid).getroot()
     return root
 
+def get_area(coords):
+    '''get area of enclosed coordinates- determines clockwise or counterclockwise order'''
+    n = len(coords) # of corners
+    area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        area += coords[i][1] * coords[j][0]
+        area -= coords[j][1] * coords[i][0]
+    #area = abs(area) / 2.0
+    return area / 2
+
+def change_direction(coords):
+    cord_area= get_area(coords)
+    if not get_area(coords) > 0: #reverse order if not clockwise
+        print("update_met_json, reversing the coords")
+        coords = coords[::-1]
+    return coords
+
 def getGeometry(obj):
     '''
     Get bbox and central coordinates.
@@ -229,6 +247,7 @@ def create_stitched_met_json( frame_infoes, met_json_file):
     bbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : bbox : %s" %bbox)
     bbox = get_env_box(geom_union.GetEnvelope())
+    bbox = change_direction(bbox)
     print("create_stitched_met_json :Final bbox : %s" %bbox)
 
     geom_union = get_union_geom(frame_infoes, "refbbox")
@@ -236,9 +255,8 @@ def create_stitched_met_json( frame_infoes, met_json_file):
     refbbox = json.loads(geom_union.ExportToJson())["coordinates"][0]
     print("create_stitched_met_json : refbbox : %s" %refbbox)
     refbbox = get_env_box(geom_union.GetEnvelope())
+    refbbox = change_direction(refbbox)
     print("create_stitched_met_json :Final refbbox : %s" %refbbox)
-
-
 
     #refbbox = json.loads(get_union_geom(frame_infoes, "refbbox").ExportToJson())["coordinates"][0]
     #print("create_stitched_met_json : refbbox : %s" %refbbox)

@@ -95,6 +95,24 @@ def get_aligned_bbox(prod, orb):
     bbox = pos[[0, 1, 3, 2], 0:2]
     return bbox.tolist()
 
+def get_area(coords):
+    '''get area of enclosed coordinates- determines clockwise or counterclockwise order'''
+    n = len(coords) # of corners
+    area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        area += coords[i][1] * coords[j][0]
+        area -= coords[j][1] * coords[i][0]
+    #area = abs(area) / 2.0
+    return area / 2
+
+def change_direction(coords):
+    cord_area= get_area(coords)
+    if not get_area(coords) > 0: #reverse order if not clockwise
+        print("update_met_json, reversing the coords")
+        coords = coords[::-1]
+    return coords
+
 def get_loc(box):
     """Return GeoJSON bbox."""
     bbox = np.array(box).astype(np.float)
@@ -207,7 +225,12 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
     print("First Union Bbox : %s " %bbox)
     bbox = get_env_box(geom_union.GetEnvelope())
     print("Get Envelop :Final bbox : %s" %bbox)    
+    
+    bbox=change_direction(bbox)
 
+    ogr_bbox = [[x, y] for y, x in bbox]
+
+    ogr_bbox = change_direction(ogr_bbox)
     #extract bperp and bpar
     cb_pkl = os.path.join(pickle_dir, "computeBaselines")
     with open(cb_pkl, 'rb') as f:
@@ -259,7 +282,7 @@ def update_met_json(orbit_type, scene_count, swath_num, master_mission,
             "maxLon":maxLon
         },
         "bbox": bbox,
-        "ogr_bbox": [[x, y] for y, x in bbox],
+        "ogr_bbox": ogr_bbox,
         #"swath": [int(swath_num)],
 	"swath": swath_num,
         "perpendicularBaseline": bperp,
