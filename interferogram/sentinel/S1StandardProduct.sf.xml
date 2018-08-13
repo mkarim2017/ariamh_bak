@@ -34,7 +34,7 @@
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-            <sf:binding>python:?parpython.initiate_standard_product_job</sf:binding>
+            <sf:binding>python:?create_standard_product.initiate_standard_product_job</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>
@@ -58,7 +58,7 @@
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-	    <sf:binding>python:?parpython.create_standard_product_job</sf:binding>
+	    <sf:binding>python:?create_standard_product.create_standard_product_job</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>
