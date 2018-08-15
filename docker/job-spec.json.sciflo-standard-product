@@ -1,20 +1,10 @@
 {
-  "command": "/home/ops/ariamh/interferogram/sentinel/sciflo_create_standard_product.sh",
+  "command": "/home/ops/ariamh/interferogram/sentinel/sciflo_topsapp_ifg.sh",
   "imported_worker_files": {
     "/home/ops/.netrc": ["/home/ops/.netrc"],
     "/home/ops/.aws": ["/home/ops/.aws", "ro"],
     "/home/ops/ariamh/conf/settings.conf": "/home/ops/ariamh/conf/settings.conf"
   },
-  "dependency_images": [
-    {
-      "container_image_name": "aria/isce_giant:latest",
-      "container_image_url": "s3://s3-us-west-2.amazonaws.com/grfn-v2-dev-code-bucket/aria-isce_giant-latest.tar.gz",
-      "container_mappings": {
-        "/home/ops/.netrc": ["/root/.netrc"],
-        "/home/ops/.aws": ["/root/.aws", "ro"]
-      }
-    }
-  ],
   "recommended-queues" : [
     "grfn-job_worker-small",
     "aria-job_worker-small",
@@ -32,27 +22,15 @@
       "destination": "context"
     },
     {
-      "name": "singlesceneOnly",
+      "name": "master_ids",
       "destination": "context"
     },
     {
-      "name": "preReferencePairDirection",
+      "name": "slave_ids",
       "destination": "context"
     },
     {
-      "name": "postReferencePairDirection",
-      "destination": "context"
-    },
-    {
-      "name": "temporalBaseline",
-      "destination": "context"
-    },
-    {
-      "name": "minMatch",
-      "destination": "context"
-    },
-    { 
-      "name": "covth",
+      "name": "subswaths",
       "destination": "context"
     },
     {
@@ -73,10 +51,6 @@
     },
     { 
       "name": "filter_strength",
-      "destination": "context"
-    },
-    {
-      "name": "dem_type",
       "destination": "context"
     },
     {

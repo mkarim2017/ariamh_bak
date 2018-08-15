@@ -1,5 +1,6 @@
 {
-  "label" : "Sentinel-1 Interferogram Product",
+  "submission_type": "individual",
+  "label" : "TopsApp Interferogram",
   "recommended-queues" : [ "grfn-job_worker-large" ],
   "allowed_accounts": [ "ops" ],
   "params" : [
@@ -18,44 +19,22 @@
       "enumerables": ["aria", "grfn", "mem", "urgent-response", "dwr"]
     },
     { 
-      "name": "singlesceneOnly",
+      "name": "master_ids",
       "from": "submitter",
-      "type": "boolean",
-      "default": "true"
+      "type": "text",
+      "placeholder": "space-delimited list of master SLC IDs, e.g. S1A_IW_SLC__1SDV_20161201T141616_20161201T141643_014187_016EBB_0B78"
     },
     { 
-      "name": "preReferencePairDirection",
+      "name": "slave_ids",
       "from": "submitter",
-      "type": "enum",
-      "default": "backward",
-      "enumerables": ["backward", "forward", "both", "none"]
+      "type": "text",
+      "placeholder": "space-delimited list of slave SLC IDs, e.g. S1A_IW_SLC__1SDV_20161107T141549_20161107T141618_013837_0163EB_5CC8 S1A_IW_SLC__1SDV_20161107T141616_20161107T141644_013837_0163EB_63B0"
     },
     { 
-      "name": "postReferencePairDirection",
+      "name": "subswaths",
       "from": "submitter",
-      "type": "enum",
-      "default": "none",
-      "enumerables": ["backward", "forward", "both", "none"]
-    },
-    { 
-      "name": "temporalBaseline",
-      "from": "submitter",
-      "type": "number",
-      "lambda": "lambda x: int(x)",
-      "default": "24"
-    },
-    { 
-      "name": "minMatch",
-      "from": "submitter",
-      "type": "number",
-      "lambda": "lambda x: int(x)",
-      "default": "2"
-    },
-    { 
-      "name": "covth",
-      "from": "submitter",
-      "type": "number",
-      "default": "0.95"
+      "type": "text",
+      "placeholder": "space-delimited list of subswaths, e.g. 1 2 3"
     },
     { 
       "name": "auto_bbox",
@@ -88,13 +67,6 @@
       "from": "submitter",
       "type": "number",
       "default": "0.5"
-    },
-    {
-      "name": "dem_type",
-      "from": "submitter",
-      "type": "enum",
-      "default": "SRTM+v3",
-      "enumerables": ["SRTM+v3", "NED1", "NED13", "NED13-downsampled"]
     },
     { 
       "name": "query",
