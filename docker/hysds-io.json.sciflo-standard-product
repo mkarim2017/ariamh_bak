@@ -1,6 +1,6 @@
 {
   "submission_type": "individual",
-  "label" : "TopsApp Interferogram",
+  "label" : "Standard Product Interferogram",
   "recommended-queues" : [ "grfn-job_worker-large" ],
   "allowed_accounts": [ "ops" ],
   "params" : [
@@ -31,12 +31,6 @@
       "placeholder": "space-delimited list of slave SLC IDs, e.g. S1A_IW_SLC__1SDV_20161107T141549_20161107T141618_013837_0163EB_5CC8 S1A_IW_SLC__1SDV_20161107T141616_20161107T141644_013837_0163EB_63B0"
     },
     { 
-      "name": "subswaths",
-      "from": "submitter",
-      "type": "text",
-      "placeholder": "space-delimited list of subswaths, e.g. 1 2 3"
-    },
-    { 
       "name": "auto_bbox",
       "from": "value",
       "type": "boolean",
@@ -44,29 +38,29 @@
     },
     { 
       "name": "precise_orbit_only",
-      "from": "submitter",
+      "from": "value",
       "type": "boolean",
-      "default": "false"
+      "default": "true"
     },
     { 
       "name": "azimuth_looks",
-      "from": "submitter",
+      "from": "value",
       "type": "number",
       "lambda": "lambda x: int(x)",
-      "default": "11"
+      "value": "19"
     },
     { 
       "name": "range_looks",
-      "from": "submitter",
+      "from": "value",
       "type": "number",
       "lambda": "lambda x: int(x)",
-      "default": "33"
+      "value": "7"
     },
     { 
       "name": "filter_strength",
-      "from": "submitter",
+      "from": "value",
       "type": "number",
-      "default": "0.5"
+      "value": "0.5"
     },
     { 
       "name": "query",
