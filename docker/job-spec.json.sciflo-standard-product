@@ -40,6 +40,10 @@
       "destination": "context"
     },
     {
+      "name": "priority",
+      "destination": "context"
+    },
+    {
       "name": "subswaths",
       "destination": "context"
     },
