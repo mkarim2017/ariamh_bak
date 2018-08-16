@@ -14,15 +14,14 @@
     </sf:outputs>
 
     <sf:processes>
-
       <sf:process id="initiate_standard_product_job">
         <sf:inputs>
           <context_file/>
         </sf:inputs>
         <sf:outputs>
           <projects/>
-          <stitched/>
-          <auto_bbox/>
+          <stitched_args/>
+          <auto_bboxes/>
           <ifg_ids/>
           <master_zip_urls/>
           <master_orbit_urls/>
@@ -30,11 +29,13 @@
           <slave_orbit_urls/>
           <swathnums/>
           <bboxes/>
+	  <dem_types/>
+	  <job_priorities/>
         </sf:outputs>
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-            <sf:binding>python:?create_standard_product.initiate_standard_product_job</sf:binding>
+            <sf:binding>python:?get_standard_product_cfg.initiate_standard_product_job</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>
@@ -42,8 +43,8 @@
       <sf:process id="create_standard_product">
         <sf:inputs>
           <projects from="@#previous"/>
-          <stitched from="@#previous"/>
-          <auto_bbox from="@#previous"/>
+          <stitched_args from="@#previous"/>
+          <auto_bboxes from="@#previous"/>
           <ifg_ids from="@#previous"/>
           <master_zip_urls from="@#previous"/>
           <master_orbit_urls from="@#previous"/>
@@ -51,6 +52,8 @@
           <slave_orbit_urls from="@#previous"/>
           <swathnums from="@#previous"/>
           <bboxes from="@#previous"/>
+	  <dem_types from="@#previous"/>
+	  <job_priorities from="@#previous"/>
         </sf:inputs>
         <sf:outputs>
           <interferograms/>
@@ -58,7 +61,7 @@
         <sf:operator>
           <sf:description></sf:description>
           <sf:op>
-	    <sf:binding>python:?create_standard_product.create_standard_product_job</sf:binding>
+	    <sf:binding job_queue="jobs_processed" async="true">map:python:?parpython.create_standard_product_job</sf:binding>
           </sf:op>
         </sf:operator>
       </sf:process>

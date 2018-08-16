@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 import os, requests, json
+from fetchOrbitES import fetch
+
+
+
 
 
 def create_ifg_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
@@ -70,33 +74,24 @@ def create_ifg_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_
         }
     } 
 
-def initiate_standard_product_job(context_file):
-    # get context
-    with open(context_file) as f:
-        context = json.load(f)
-
-    return context['project'], False, context['auto_bbox'], context['id'], context['master_zip_url'], context['master_orbit_url'], context['slave_zip_url'], context['slave_orbit_url'], context['swathnum'], context['bbox']
-
-def create_standard_product_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
-                   slave_zip_url, slave_orbit_url, swathnum, bbox, wuid=None, job_num=None):
-    """Map function for create interferogram job json creation."""
-    wuid="test_wwid"
-    job_num="test_job_num"
+def create_standard_product_job(project, stitched_arg, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
+		   slave_zip_url, slave_orbit_url, swathnums, bbox, dem_type, job_priority, wuid=None, job_num=None):
+    """Map function for create standard_product interferogram job json creation."""
 
     if wuid is None or job_num is None:
-        wuid="test_wwid"
-        job_num="test_job_num"
-	print("ERROR : Need to specify workunit id and job num.")
-        #raise RuntimeError("Need to specify workunit id and job num.")
+        raise RuntimeError("Need to specify workunit id and job num.")
 
-    job_type = "sentinel_ifg-standard_product"
-    disk_usage = "200GB"
-    
-    print("Master Zip Url")
-    print(master_zip_url)
-    print(slave_zip_url)
-    print( master_orbit_url)
-    print( slave_orbit_url)
+    job_type = "sentinel_standard-product-ifg-singlescene"
+    disk_usage = "300GB"
+
+    if stitched_arg:
+        job_type = "sentinel_ifg-stitched"
+        disk_usage = "300GB"
+    else:
+        job_type = "sentinel_ifg-singlescene"
+        disk_usage = "200GB"
+
+
     # set job queue based on project
     job_queue = "%s-job_worker-large" % project
 
@@ -105,14 +100,8 @@ def create_standard_product_job(project, stitched, auto_bbox, ifg_id, master_zip
         { 'url': master_orbit_url },
         { 'url': slave_orbit_url },
     ]
-    print(type(master_zip_url))
-    print(type(slave_zip_url))
     for m in master_zip_url: localize_urls.append({'url': m})
     for s in slave_zip_url: localize_urls.append({'url': s})
-    print("localize_urls : %s" %localize_urls)
-    
-    print("id : %s" %ifg_id)
-    print("swathnum : %s" %swathnum)
 
     return {
         "job_name": "%s-%s" % (job_type, ifg_id),
@@ -141,7 +130,14 @@ def create_standard_product_job(project, stitched, auto_bbox, ifg_id, master_zip
             "slave_zip_file": [os.path.basename(i) for i in slave_zip_url],
             "slave_orbit_url": slave_orbit_url,
             "slave_orbit_file": os.path.basename(slave_orbit_url),
-            "swathnum": swathnum,
+            "swathnum": [1,2,3],
+	    "azimuth_looks": 19,
+  	    "range_looks" : 7,
+	    "singlesceneOnly": True,
+ 	    "covth": 0.99,
+	    "dem_type": dem_type,
+	    "filter_strength": 0.5,
+	    "job_priority": job_priority,
             "bbox": bbox,
             "auto_bbox": auto_bbox,
 
@@ -154,8 +150,7 @@ def create_standard_product_job(project, stitched, auto_bbox, ifg_id, master_zip
             # localize urls
             "localize_urls": localize_urls,
         }
-    }
-
+    } 
 def create_offset_job(project, stitched, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
                    slave_zip_url, slave_orbit_url, swathnum, bbox, ampcor_skip_width, ampcor_skip_height,
                    ampcor_src_win_width, ampcor_src_win_height, ampcor_src_width, ampcor_src_height,
