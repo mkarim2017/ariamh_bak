@@ -29,7 +29,7 @@ SLC_RE = re.compile(r'(?P<mission>S1\w)_IW_SLC__.*?' +
                     r'_(?P<end_year>\d{4})(?P<end_month>\d{2})(?P<end_day>\d{2})' +
                     r'T(?P<end_hour>\d{2})(?P<end_min>\d{2})(?P<end_sec>\d{2})_.*$')
 
-IFG_ID_TMPL = "S1-IFG_R{}_M{:d}S{:d}_TN{:03d}_{:%Y%m%dT%H%M%S}-{:%Y%m%dT%H%M%S}_s{}-{}-{}"
+IFG_ID_TMPL = "S1-IFG_R{}_M{:d}S{:d}_TN{:03d}_{:%Y%m%dT%H%M%S}-{:%Y%m%dT%H%M%S}_s123-{}-{}-standard_product"
 RSP_ID_TMPL = "S1-SLCP_R{}_M{:d}S{:d}_TN{:03d}_{:%Y%m%dT%H%M%S}-{:%Y%m%dT%H%M%S}_s{}-{}-{}"
 
 BASE_PATH = os.path.dirname(__file__)
@@ -89,13 +89,34 @@ def query_grq( doc_id):
     result = r.json()
     print(result['hits']['total'])
     return result['hits']['hits']
-
+'''
 def get_dem_type(slc_source):
     dem_type = "SRTM+v3"
     if slc_source['city'] is not None and len(slc_source['city'])>0:
 	if slc_source['city'][0]['country_name'] is not None and slc_source['city'][0]['country_name'].lower() == "united states":
 	    dem_type="Ned1"
     return dem_type
+'''
+
+def get_dem_type(info):
+    """Get dem type."""
+
+    dem_type = "SRTM+v3"
+
+    dems = {}
+    for id in info:
+	dem_type = "SRTM+v3"
+        h = info[id]
+        fields = h["_source"]
+	if fields['city'][0]['country_name'] is not None and fields['city'][0]['country_name'].lower() == "united states":
+            dem_type="Ned1"
+        dems.setdefault(dem_type, []).append(id)
+    if len(dems) != 1:
+	logger.info("There are more than one type of dem, so selecting SRTM+v3")
+	dem_type = "SRTM+v3"
+    return dem_type
+
+
 
 def print_list(l):
     for f in l:
@@ -108,7 +129,7 @@ def get_metadata(id, rest_url, url):
     query = {
         "query": {
             "term": {
-                "_id": id,
+                "_id": id
             }
         }
     }
@@ -203,7 +224,7 @@ def get_urls(info):
     urls = []
     for id in info:
         h = info[id]
-        fields = h['fields']['partial'][0]
+        fields = h['_source']
         prod_url = fields['urls'][0]
         if len(fields['urls']) > 1:
             for u in fields['urls']:
@@ -214,13 +235,19 @@ def get_urls(info):
     return urls
 
 
+def get_bool_param(ctx, param):
+    """Return bool param from context."""
+
+    if param in ctx and isinstance(ctx[param], bool): return ctx[param]
+    return True if ctx.get(param, 'true').strip().lower() == 'true' else False
+
 def get_track(info):
     """Get track number."""
 
     tracks = {}
     for id in info:
         h = info[id]
-        fields = h['fields']['partial'][0]   
+        fields = h["_source"]
         track = fields['metadata']['trackNumber']
         tracks.setdefault(track, []).append(id)
     if len(tracks) != 1:
@@ -234,9 +261,9 @@ def initiate_standard_product_job(context_file):
 
     # get args
     project = context['project']
-    master_ids = [i.strip() for i in context['master_ids'].split()]
-    slave_ids = [i.strip() for i in context['slave_ids'].split()]
-    subswaths = [int(i.strip()) for i in context['subswaths'].split()]
+    master_ids = [i.strip() for i in context['master_ids']]
+    slave_ids = [i.strip() for i in context['slave_ids']]
+    subswaths = [1, 2, 3] #context['subswaths']
     azimuth_looks = int(context['azimuth_looks'])
     range_looks = int(context['range_looks'])
     filter_strength = float(context['filter_strength'])
@@ -286,11 +313,30 @@ def initiate_standard_product_job(context_file):
     if track != slave_track:
         raise RuntimeError("Slave track {} doesn't match master track {}.".format(slave_track, track))
 
+    ref_scence = master_md
+    if len(master_ids)==1:
+	ref_scence = master_md
+    elif len(slave_ids)==1:
+	ref_scence = slave_md
+    elif len(master_ids) > 1 and  len(slave_ids)>1:
+	raise RuntimeError("Single Scene Reference Required.")
+ 
     # get urls (prefer s3)
     master_urls = get_urls(master_md) 
     logger.info("master_urls: {}".format(master_urls))
     slave_urls = get_urls(slave_md) 
     logger.info("slave_ids: {}".format(slave_urls))
+
+    dem_type = get_dem_type(master_md)
+
+    # get dem_type
+    dem_type = get_dem_type(master_md)
+    logger.info("master_dem_type: {}".format(dem_type))
+    slave_dem_type = get_dem_type(slave_md)
+    logger.info("slave_dem_type: {}".format(slave_dem_type))
+    if dem_type != slave_dem_type:
+	dem_type = "SRTM+v3"
+
 
     # get orbits
     master_orbit_url = get_orbit(master_ids)
@@ -306,8 +352,8 @@ def initiate_standard_product_job(context_file):
             break
 
     # fail if we expect only precise orbits
-    if precise_orbit_only and orbit_type == 'resorb':
-        raise RuntimeError("Precise orbit required.")
+    #if precise_orbit_only and orbit_type == 'resorb':
+        #raise RuntimeError("Precise orbit required.")
 
 
 
@@ -331,7 +377,7 @@ def initiate_standard_product_job(context_file):
     # generate job configs
     bbox = [-90., 90., -180., 180.]
     auto_bbox = True
-
+    id_tmpl = IFG_ID_TMPL
 
     stitched_args.append(False if len(master_ids) == 1 or len(slave_ids) == 1 else True)
     master_zip_urls.append(master_urls)
@@ -356,16 +402,17 @@ def initiate_standard_product_job(context_file):
         #azimuth_looks,
         #range_looks,
         filter_strength,
+	dem_type
     ])).hexdigest()
     ifg_ids.append(id_tmpl.format('M', len(master_ids), len(slave_ids),
                                       track, ifg_master_dt,
-                                      ifg_slave_dt, subswaths,
-                                      orbit_type, ifg_hash[0:4]))
+                                      ifg_slave_dt, orbit_type, ifg_hash[0:4]))
                             
 
+    logger.info("\n\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n" %(projects, stitched_args, auto_bboxes, ifg_ids, master_zip_urls, master_orbit_urls, slave_zip_urls, slave_orbit_urls, swathnums, bboxes, cdem_type))
     return ( projects, stitched_args, auto_bboxes, ifg_ids, master_zip_urls,
              master_orbit_urls, slave_zip_urls, slave_orbit_urls, swathnums,
-             bboxes )
+             bboxes, dem_type)
 
 def initiate_sp2(context_file):
 
@@ -526,16 +573,23 @@ def get_orbit_url (slc_id, track):
     return orbit_url
 
 
-
-def create_standard_product_job(project, auto_bbox, ifg_id, master_zip_url, master_orbit_url, 
-                   slave_zip_url, slave_orbit_url, bbox, wuid=None, job_num=None):
+def create_standard_product_job(projects, stitched_args, auto_bboxes, ifg_ids, master_zip_urls, master_orbit_urls, 
+		   slave_zip_urls, slave_orbit_urls, swathnums, bboxes, dem_type, wuid=None, job_num=None):
     """Map function for create interferogram job json creation."""
 
     if wuid is None or job_num is None:
         raise RuntimeError("Need to specify workunit id and job num.")
 
-    job_type = "sentinel_ifg-singlescene"
+    job_type = "sentinel_standard-product-ifg-singlescene"
     disk_usage = "300GB"
+
+    if stitched:
+        job_type = "sentinel_ifg-stitched"
+        disk_usage = "300GB"
+    else:
+        job_type = "sentinel_ifg-singlescene"
+        disk_usage = "200GB"
+
 
     # set job queue based on project
     job_queue = "%s-job_worker-large" % project
@@ -547,6 +601,7 @@ def create_standard_product_job(project, auto_bbox, ifg_id, master_zip_url, mast
     ]
     for m in master_zip_url: localize_urls.append({'url': m})
     for s in slave_zip_url: localize_urls.append({'url': s})
+    exit(0)
 
     return {
         "job_name": "%s-%s" % (job_type, ifg_id),
